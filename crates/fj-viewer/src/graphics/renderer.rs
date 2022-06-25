@@ -9,6 +9,7 @@ use wgpu_glyph::ab_glyph::InvalidFont;
 use crate::{
     camera::Camera,
     screen::{Screen, Size},
+    window::Window,
 };
 
 use super::{
@@ -34,15 +35,31 @@ pub struct Renderer {
     pipelines: Pipelines,
 
     config_ui: ConfigUi,
+<<<<<<< Updated upstream
+=======
+
+    pub egui_state: egui_winit::State,
+    pub egui_context: egui::Context,
+
+    egui_rpass: egui_wgpu_backend::RenderPass,
+
+    egui_options: EguiOptionsState,
+>>>>>>> Stashed changes
 }
 
 impl Renderer {
     /// Returns a new `Renderer`.
-    pub async fn new(screen: &impl Screen) -> Result<Self, InitError> {
+    pub async fn new(window: &Window) -> Result<Self, InitError> {
         let instance = wgpu::Instance::new(wgpu::Backends::PRIMARY);
 
+<<<<<<< Updated upstream
+=======
+        let egui_state = egui_winit::State::new(4096, window.window());
+        let egui_context = egui::Context::default();
+
+>>>>>>> Stashed changes
         // This is sound, as `window` is an object to create a surface upon.
-        let surface = unsafe { instance.create_surface(screen.window()) };
+        let surface = unsafe { instance.create_surface(window.window()) };
 
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
@@ -74,7 +91,7 @@ impl Renderer {
             .get_preferred_format(&adapter)
             .expect("Error determining preferred color format");
 
-        let Size { width, height } = screen.size();
+        let Size { width, height } = window.size();
         let surface_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: color_format,
@@ -238,8 +255,234 @@ impl Renderer {
             );
         }
 
+<<<<<<< Updated upstream
         self.config_ui
             .draw(
+=======
+        if self.egui_options.show_original_ui {
+            self.config_ui
+                .draw(
+                    &self.device,
+                    &mut encoder,
+                    &color_view,
+                    &self.surface_config,
+                    &self.geometries.aabb,
+                    config,
+                )
+                .map_err(DrawError::Text)?;
+        }
+
+        //
+
+        //
+        // This integration is basically the result of locating the
+        // `.present()` call in the `egui` example, here:
+        //
+        //     <https://github.com/hasenbanck/egui_example/blob/ca1262a701daf0b20e097ef627fc301ab63339d9/src/main.rs#L177>
+        //
+        // and then the equivalent call in `renderer.rs`, here:
+        //
+        //     <https://github.com/hannobraun/Fornjot/blob/15294c2ca2fa5ac5016bb29853943b28952f2dae/fj-app/src/graphics/renderer.rs#L245>
+        //
+        // Then working backwards from there to merge the functionality.
+        //
+        // In addition, the following examples were also referenced:
+        //
+        //  * "Make the example more like an actual use case #17"
+        //    <https://github.com/hasenbanck/egui_example/pull/17/files>
+        //    This removes some non-essential code from the example
+        //    which helps clarify what's *actually* necessary.
+        //
+        //  * "Update to 0.17, use official winit backend #18"
+        //    <https://github.com/hasenbanck/egui_example/pull/18/files>
+        //    This uses a more up-to-date `egui` version which
+        //    included some API changes.
+        //    It's still not the *latest* `egui` version though.
+        //
+
+        let egui_input = self.egui_state.take_egui_input(window);
+        self.egui_context.begin_frame(egui_input);
+
+        fn get_bbox_size_text(aabb: &Aabb<3>) -> String {
+            /* Render size of model bounding box */
+            let bbsize = aabb.size().components;
+            let info = format!(
+                "Model bounding box size:\n{:0.1} {:0.1} {:0.1}",
+                bbsize[0].into_f32(),
+                bbsize[1].into_f32(),
+                bbsize[2].into_f32()
+            );
+            info
+        }
+
+        // A simple UI
+        egui::SidePanel::left("fj-left-panel").show(&self.egui_context, |ui| {
+            //
+
+            ui.add_space(16.0);
+
+            ui.group(|ui| {
+                ui.checkbox(&mut config.draw_model, "Render model")
+                    .on_hover_text_at_pointer("Toggle with 1");
+                ui.checkbox(&mut config.draw_mesh, "Render mesh")
+                    .on_hover_text_at_pointer("Toggle with 2");
+                ui.checkbox(&mut config.draw_debug, "Render debug")
+                    .on_hover_text_at_pointer("Toggle with 3");
+                ui.checkbox(
+                    &mut self.egui_options.show_original_ui,
+                    "Render original UI",
+                );
+                ui.add_space(16.0);
+                ui.strong(get_bbox_size_text(&self.geometries.aabb));
+            });
+
+            ui.add_space(16.0);
+
+            {
+                ui.group(|ui| {
+                    ui.checkbox(
+                        &mut self.egui_options.show_settings_ui,
+                        "Show egui settings UI",
+                    );
+                    if self.egui_options.show_settings_ui {
+                        self.egui_context.settings_ui(ui);
+                    }
+                });
+
+                ui.add_space(16.0);
+
+                ui.group(|ui| {
+                    ui.checkbox(
+                        &mut self.egui_options.show_inspection_ui,
+                        "Show egui inspection UI",
+                    );
+                    if self.egui_options.show_inspection_ui {
+                        ui.indent("indent-inspection-ui", |ui| {
+                            self.egui_context.inspection_ui(ui);
+                        });
+                    }
+                });
+            }
+
+            ui.add_space(16.0);
+
+            {
+                //
+                // Originally this was only meant to be a simple demonstration
+                // of the `egui` `trace!()` macro...
+                //
+                // ...but it seems the trace feature can't be enabled
+                // separately from the layout debug feature, which all
+                // gets a bit messy...
+                //
+                // ...so, this instead shows one possible way to implement
+                // "trace only" style debug text on hover.
+                //
+                ui.group(|ui| {
+                    let label_text = format!(
+                        "Show debug text demo.{}",
+                        if self.egui_options.show_debug_text_example {
+                            " (Hover me.)"
+                        } else {
+                            ""
+                        }
+                    );
+
+                    ui.style_mut().wrap = Some(false);
+
+                    if ui
+                        .checkbox(
+                            &mut self.egui_options.show_debug_text_example,
+                            label_text,
+                        )
+                        .hovered()
+                    {
+                        if self.egui_options.show_debug_text_example {
+                            let hover_pos = ui
+                                .input()
+                                .pointer
+                                .hover_pos()
+                                .unwrap_or_default();
+                            ui.painter().debug_text(
+                                hover_pos,
+                                egui::Align2::LEFT_TOP,
+                                egui::Color32::DEBUG_COLOR,
+                                format!("{:#?}", &config),
+                            );
+                        }
+                    }
+                });
+            }
+
+            ui.add_space(16.0);
+
+            {
+                //
+                // Demonstration of the `egui` layout debug functionality.
+                //
+                ui.group(|ui| {
+                    //
+
+                    if ui
+                        .checkbox(
+                            &mut self.egui_options.show_layout_debug_on_hover,
+                            "Show layout debug on hover.",
+                        )
+                        .changed()
+                    {
+                        ui.ctx().set_debug_on_hover(
+                            self.egui_options.show_layout_debug_on_hover,
+                        );
+                    }
+
+                    ui.scope(|ui| {
+                        if self.egui_options.show_trace {
+                            egui::trace!(ui, format!("{:?}", &config));
+                        }
+                    });
+
+                    ui.indent("indent-show-trace", |ui| {
+                        ui.set_enabled(
+                            self.egui_options.show_layout_debug_on_hover,
+                        );
+
+                        ui.checkbox(
+                            &mut self.egui_options.show_trace,
+                            "Also show egui trace.",
+                        );
+
+                        //
+                    });
+                });
+            }
+
+            ui.add_space(16.0);
+        });
+
+        // End the UI frame. We could now handle the output and draw the UI with the backend.
+        let egui_output = self.egui_context.end_frame();
+        let egui_paint_jobs = self.egui_context.tessellate(egui_output.shapes);
+
+        // Upload all resources for the GPU.
+        let egui_screen_descriptor = egui_wgpu_backend::ScreenDescriptor {
+            physical_width: self.surface_config.width,
+            physical_height: self.surface_config.height,
+            //
+            // Note: `scale_factor` can be overridden via `WINIT_X11_SCALE_FACTOR` environment variable,
+            //       see: <https://docs.rs/winit/0.26.1/winit/window/struct.Window.html#method.scale_factor>
+            //
+            scale_factor: window.scale_factor() as f32,
+        };
+
+        // Note: For info about the font texture, see:
+        //
+        //        * <https://docs.rs/egui/0.17.0/egui/enum.TextureId.html#variant.Managed>
+        //
+        //        * <https://docs.rs/epaint/0.17.0/epaint/textures/struct.TextureManager.html#method.alloc>
+
+        self.egui_rpass
+            .add_textures(
+>>>>>>> Stashed changes
                 &self.device,
                 &mut encoder,
                 &color_view,

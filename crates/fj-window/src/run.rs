@@ -12,6 +12,7 @@ use fj_viewer::{
     graphics::{self, DrawConfig, Renderer},
     input::{self, KeyState},
     screen::{Position, Screen as _, Size},
+    window::Window,
 };
 use futures::executor::block_on;
 use tracing::{trace, warn};
@@ -23,8 +24,6 @@ use winit::{
     },
     event_loop::{ControlFlow, EventLoop},
 };
-
-use crate::window::{self, Window};
 
 /// Initializes a model viewer for a given model and enters its process loop.
 pub fn run(
@@ -197,7 +196,9 @@ pub fn run(
                 if let (Some(shape), Some(camera)) = (&shape, &mut camera) {
                     camera.update_planes(&shape.aabb);
 
-                    if let Err(err) = renderer.draw(camera, &draw_config) {
+                    if let Err(err) =
+                        renderer.draw(camera, &mut draw_config, window.window())
+                    {
                         warn!("Draw error: {}", err);
                     }
                 }
@@ -246,7 +247,7 @@ pub fn run(
 pub enum Error {
     /// Error initializing window
     #[error("Error initializing window")]
-    WindowInit(#[from] window::Error),
+    WindowInit(#[from] fj_viewer::window::Error),
 
     /// Error initializing graphics
     #[error("Error initializing graphics")]

@@ -14,4 +14,3 @@
 #![warn(missing_docs)]
 
 pub mod run;
-pub mod window;
