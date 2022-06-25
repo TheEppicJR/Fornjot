@@ -20,6 +20,7 @@ robust = "0.2.3"
 slotmap = "1.0.6"
 spade = "2.0.0"
 thiserror = "1.0.31"
+uom = "0.32.0"
 
 [dependencies.fj-interop]
 version = "0.6.0"

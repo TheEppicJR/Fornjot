@@ -756,6 +756,7 @@ dependencies = [
  "slotmap",
  "spade",
  "thiserror",
+ "uom",
 ]
 
 [[package]]
@@ -2793,6 +2794,16 @@ name = "unicode-width"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ed742d4ea2bd1176e236172c8429aaf54486e7ac098db29ffe6529e0ce50973"
+
+[[package]]
+name = "uom"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ffcb443c899d2adc34f4ae4c64d6e9867b6d3ead2fad03979a8732a4ab6d396f"
+dependencies = [
+ "num-traits",
+ "typenum",
+]
 
 [[package]]
 name = "url"
