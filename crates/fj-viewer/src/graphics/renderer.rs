@@ -18,8 +18,18 @@ use super::{
     uniforms::Uniforms, vertices::Vertices, DEPTH_FORMAT,
 };
 
+#[derive(Default)]
+struct EguiOptionsState {
+    show_trace: bool,
+    show_layout_debug_on_hover: bool,
+    show_debug_text_example: bool,
+    show_original_ui: bool,
+    show_settings_ui: bool,
+    show_inspection_ui: bool,
+}
+
 /// Graphics rendering state and target abstraction
-#[derive(Debug)]
+// #[derive(Debug)]
 pub struct Renderer {
     surface: wgpu::Surface,
     device: wgpu::Device,
@@ -149,6 +159,24 @@ impl Renderer {
 
         let config_ui = ConfigUi::new(&device, color_format)?;
 
+        //
+        // Note: We need to hold on to this otherwise (from my memory)
+        //       it causes the egui font texture to get dropped after
+        //       drawing one frame.
+        //
+        //       This then results in an `egui_wgpu_backend` error of
+        //       `BackendError::Internal` with message:
+        //
+        //           "Texture 0 used but not live"
+        //
+        //       See also: <https://github.com/hasenbanck/egui_wgpu_backend/blob/b2d3e7967351690c6425f37cd6d4ffb083a7e8e6/src/lib.rs#L373>
+        //
+        let egui_rpass = egui_wgpu_backend::RenderPass::new(
+            &device,
+            surface_config.format,
+            1,
+        );
+
         Ok(Self {
             surface,
             device,
@@ -164,6 +192,13 @@ impl Renderer {
             pipelines,
 
             config_ui,
+
+            egui_context,
+            egui_state,
+
+            egui_rpass,
+
+            egui_options: Default::default(),
         })
     }
 
@@ -196,7 +231,8 @@ impl Renderer {
     pub fn draw(
         &mut self,
         camera: &Camera,
-        config: &DrawConfig,
+        config: &mut DrawConfig,
+        window: &winit::window::Window,
     ) -> Result<(), DrawError> {
         let aspect_ratio = self.surface_config.width as f64
             / self.surface_config.height as f64;
@@ -471,15 +507,22 @@ impl Renderer {
         //        * <https://docs.rs/epaint/0.17.0/epaint/textures/struct.TextureManager.html#method.alloc>
 
         self.egui_rpass
-            .add_textures(
-                &self.device,
+            .execute(
                 &mut encoder,
                 &color_view,
-                &self.surface_config,
-                &self.geometries.aabb,
-                config,
+                &egui_paint_jobs,
+                &egui_screen_descriptor,
+                //
+                // "Set this to `None` to overlay the UI on top of what's in the framebuffer"
+                // via <https://github.com/hasenbanck/egui_example/pull/17/files#diff-42cb6807ad74b3e201c5a7ca98b911c5fa08380e942be6e4ac5807f8377f87fcR132>
+                //
+                // Alternatively, for initial testing, you can use a colour without alpha
+                // (e.g. `Some(wgpu::Color {r:0.5, g:0.0, b:0.0, a:1.0})` ) in order
+                // to verify that the renderpass is doing *something*.
+                //
+                None,
             )
-            .map_err(DrawError::Text)?;
+            .unwrap();
 
         let command_buffer = encoder.finish();
         self.queue.submit(Some(command_buffer));
@@ -570,13 +613,8 @@ pub enum InitError {
 /// Describes errors related to non initialization graphics errors.
 #[derive(Error, Debug)]
 pub enum DrawError {
-    #[error("Error acquiring output surface: {0}")]
-    /// Surface drawing error.
-    ///
-    /// See - [wgpu::SurfaceError](https://docs.rs/wgpu/latest/wgpu/enum.SurfaceError.html)
+    #[error("Error acquiring output surface")]
     Surface(#[from] wgpu::SurfaceError),
-
-    #[error("Error drawing text: {0}")]
-    /// Text rasterisation error.
+    #[error("Error drawing text")]
     Text(String),
 }
