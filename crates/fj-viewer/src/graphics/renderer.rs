@@ -35,8 +35,6 @@ pub struct Renderer {
     pipelines: Pipelines,
 
     config_ui: ConfigUi,
-<<<<<<< Updated upstream
-=======
 
     pub egui_state: egui_winit::State,
     pub egui_context: egui::Context,
@@ -44,7 +42,6 @@ pub struct Renderer {
     egui_rpass: egui_wgpu_backend::RenderPass,
 
     egui_options: EguiOptionsState,
->>>>>>> Stashed changes
 }
 
 impl Renderer {
@@ -52,12 +49,9 @@ impl Renderer {
     pub async fn new(window: &Window) -> Result<Self, InitError> {
         let instance = wgpu::Instance::new(wgpu::Backends::PRIMARY);
 
-<<<<<<< Updated upstream
-=======
         let egui_state = egui_winit::State::new(4096, window.window());
         let egui_context = egui::Context::default();
 
->>>>>>> Stashed changes
         // This is sound, as `window` is an object to create a surface upon.
         let surface = unsafe { instance.create_surface(window.window()) };
 
@@ -255,10 +249,6 @@ impl Renderer {
             );
         }
 
-<<<<<<< Updated upstream
-        self.config_ui
-            .draw(
-=======
         if self.egui_options.show_original_ui {
             self.config_ui
                 .draw(
@@ -482,7 +472,6 @@ impl Renderer {
 
         self.egui_rpass
             .add_textures(
->>>>>>> Stashed changes
                 &self.device,
                 &mut encoder,
                 &color_view,
