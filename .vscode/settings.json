@@ -4,5 +4,31 @@
     "rust-analyzer.diagnostics.disabled": [
         "mismatched-arg-count"
     ],
-    "rust-analyzer.checkOnSave.command": "clippy"
+    "rust-analyzer.checkOnSave.command": "clippy",
+    "cSpell.words": [
+        "Aabb",
+        "ahdinosaur",
+        "bbox",
+        "bbsize",
+        "eframe",
+        "egui",
+        "Fornjot",
+        "jacobrosenthal",
+        "jminer",
+        "Kethku",
+        "lthiery",
+        "martindederer",
+        "nalgebra",
+        "Oslin",
+        "rpass",
+        "sanxiyn",
+        "seigel",
+        "serde",
+        "sucaba",
+        "threemf",
+        "webtrax",
+        "wgpu",
+        "winit",
+        "Yatekii"
+    ]
 }

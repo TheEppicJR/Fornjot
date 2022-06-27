@@ -24,9 +24,12 @@ tracing     = "0.1.32"
 wgpu        = "0.12.0"
 wgpu_glyph  = "0.16.0"
 winit       = "0.26.1"
-egui_wgpu_backend = "0.17"
-egui = "0.17"
-egui-winit = "0.17"
+egui-wgpu = "0.18"
+egui = "0.18"
+egui-winit = "0.18"
+eframe = {version = "0.18", features = ["wgpu"]}
+bevy = "0.7"
+bevy_egui = "0.14"
 
 [dependencies.clap]
 version = "3.1.18"
