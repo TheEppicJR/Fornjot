@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use std::{io, mem::size_of};
 
+use crate::code_editor::CodeEditor;
 use fj_math::{Aabb, Point};
 use thiserror::Error;
 use tracing::debug;
@@ -21,20 +22,20 @@ use fj_viewer::graphics::{
     uniforms::Uniforms, vertices::Vertices, DEPTH_FORMAT,
 };
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct FornjotConfig {
     pub dark_mode: bool,
     pub api_key: String,
 }
 
 #[derive(Default)]
-struct EguiOptionsState {
-    show_trace: bool,
-    show_layout_debug_on_hover: bool,
-    show_debug_text_example: bool,
-    show_original_ui: bool,
-    show_settings_ui: bool,
-    show_inspection_ui: bool,
+pub struct EguiOptionsState {
+    pub show_trace: bool,
+    pub show_layout_debug_on_hover: bool,
+    pub show_debug_text_example: bool,
+    pub show_original_ui: bool,
+    pub show_settings_ui: bool,
+    pub show_inspection_ui: bool,
 }
 
 impl Default for FornjotConfig {
@@ -57,36 +58,42 @@ fn get_bbox_size_text(aabb: &Aabb<3>) -> String {
     );
     info
 }
-
+#[derive(Default)]
 pub struct Fornjot {
     pub config: FornjotConfig,
     pub api_key_initialized: bool,
     pub toggle_config: bool,
     pub toggle_about: bool,
+    pub code_edit: CodeEditor,
 
-    surface: wgpu::Surface,
-    device: wgpu::Device,
-    queue: wgpu::Queue,
+    // surface: wgpu::Surface,
+    // device: wgpu::Device,
+    // queue: wgpu::Queue,
 
-    surface_config: wgpu::SurfaceConfiguration,
-    depth_view: wgpu::TextureView,
+    // surface_config: wgpu::SurfaceConfiguration,
+    // depth_view: wgpu::TextureView,
 
-    uniform_buffer: wgpu::Buffer,
-    bind_group: wgpu::BindGroup,
-
-    geometries: Geometries,
-    pipelines: Pipelines,
-
+    // uniform_buffer: wgpu::Buffer,
+    // bind_group: wgpu::BindGroup,
+    // geometries: Geometries,
+    // pipelines: Pipelines,
     pub egui_context: egui::Context,
 
-    egui_rpass: egui_wgpu::renderer::RenderPass,
-
-    egui_options: EguiOptionsState,
+    // egui_rpass: egui_wgpu::renderer::RenderPass,
+    pub egui_options: EguiOptionsState,
 }
 
 impl Fornjot {
     pub fn init(mut self, cc: &CreationContext) -> Self {
         self
+    }
+
+    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        // Customize egui here with cc.egui_ctx.set_fonts and cc.egui_ctx.set_visuals.
+        // Restore app state using cc.storage (requires the "persistence" feature).
+        // Use the cc.gl (a glow::Context) to create graphics shaders and buffers that you can use
+        // for e.g. egui::PaintCallback.
+        Self::default()
     }
 
     pub(crate) fn render_model_panel(
@@ -121,7 +128,7 @@ impl Fornjot {
                     "Render original UI",
                 );
                 ui.add_space(16.0);
-                ui.strong(get_bbox_size_text(&self.geometries.aabb));
+                // ui.strong(get_bbox_size_text(&self.geometries.aabb));
             });
 
             ui.add_space(16.0);

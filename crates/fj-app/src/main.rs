@@ -16,17 +16,17 @@ mod application;
 mod args;
 mod config;
 // mod ecs_manager;
+mod code_editor;
 mod editor_window;
 mod main_ui;
 mod project_manager;
-
-use std::path::PathBuf;
+mod syntax_highlighting;
+mod window;
 
 // use anyhow::{anyhow, Context as _};
 // use fj_export::export;
 // use fj_host::{Model, Parameters};
 use fj_operations::shape_processor::ShapeProcessor;
-use fj_window::run::run;
 use tracing_subscriber::fmt::format;
 use tracing_subscriber::EnvFilter;
 
