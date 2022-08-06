@@ -1,9 +1,12 @@
 [package]
 name = "fj-viewer"
-version = "0.6.0"
+version = "0.10.0"
 edition = "2021"
 
-description = "The world needs another CAD program."
+description = """\
+Early-stage, next-generation, code-first CAD application. Because the world \
+needs another CAD program.\
+"""
 readme = "../../README.md"
 homepage = "https://www.fornjot.app/"
 repository = "https://github.com/hannobraun/fornjot"
@@ -13,7 +16,7 @@ categories = ["encoding", "mathematics", "rendering"]
 
 
 [dependencies]
-bytemuck = "1.9.1"
+bytemuck = "1.11.0"
 raw-window-handle = "0.4.3"
 thiserror = "1.0.31"
 tracing = "0.1.35"
@@ -25,9 +28,19 @@ egui = "0.18"
 egui-winit = "0.18"
 
 [dependencies.fj-interop]
-version = "0.6.0"
+version = "0.10.0"
 path = "../fj-interop"
 
 [dependencies.fj-math]
-version = "0.6.0"
+version = "0.10.0"
 path = "../fj-math"
+
+[dependencies.egui]
+version = "0.18.1"
+
+[dependencies.egui-wgpu]
+version = "0.18.0"
+features = ["winit"]
+
+[dependencies.egui-winit]
+version = "0.18.0"

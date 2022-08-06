@@ -1,4 +1,4 @@
-use crate::{Point, Vector};
+use crate::{Point, Scalar, Triangle, Vector};
 
 /// An n-dimensional line, defined by an origin and a direction
 ///
@@ -7,30 +7,84 @@ use crate::{Point, Vector};
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
 #[repr(C)]
 pub struct Line<const D: usize> {
-    /// The origin of the line
+    origin: Point<D>,
+    direction: Vector<D>,
+}
+
+impl<const D: usize> Line<D> {
+    /// Create a line from a point and a vector
+    ///
+    /// # Panics
+    ///
+    /// Panics, if `direction` has a length of zero.
+    pub fn from_origin_and_direction(
+        origin: Point<D>,
+        direction: Vector<D>,
+    ) -> Self {
+        if direction.magnitude() == Scalar::ZERO {
+            panic!(
+                "Can't construct `Line`. Direction is zero: {:?}",
+                direction
+            );
+        }
+
+        Self { origin, direction }
+    }
+
+    /// Create a line from two points
+    ///
+    /// # Panics
+    ///
+    /// Panics, if the points are coincident.
+    pub fn from_points(points: [impl Into<Point<D>>; 2]) -> Self {
+        let [a, b] = points.map(Into::into);
+
+        Self::from_origin_and_direction(a, b - a)
+    }
+
+    /// Access the origin of the line
     ///
     /// The origin is a point on the line which, together with the `direction`
     /// field, defines the line fully. The origin also defines the origin of the
     /// line's 1-dimensional coordinate system.
-    pub origin: Point<D>,
+    pub fn origin(&self) -> Point<D> {
+        self.origin
+    }
 
-    /// The direction of the line
+    /// Access the direction of the line
     ///
     /// The length of this vector defines the unit of the line's curve
     /// coordinate system. The coordinate `1.` is always were the direction
     /// vector points, from `origin`.
-    pub direction: Vector<D>,
-}
+    pub fn direction(&self) -> Vector<D> {
+        self.direction
+    }
 
-impl<const D: usize> Line<D> {
-    /// Create a line from two points
-    pub fn from_points(points: [impl Into<Point<D>>; 2]) -> Self {
-        let [a, b] = points.map(Into::into);
+    /// Determine if this line is coincident with another line
+    ///
+    /// # Implementation Note
+    ///
+    /// This method only returns `true`, if the lines are precisely coincident.
+    /// This will probably not be enough going forward, but it'll do for now.
+    pub fn is_coincident_with(&self, other: &Self) -> bool {
+        let other_origin_is_not_on_self = {
+            let a = other.origin;
+            let b = self.origin;
+            let c = self.origin + self.direction;
 
-        Self {
-            origin: a,
-            direction: b - a,
+            // The triangle is valid only, if the three points are not on the
+            // same line.
+            Triangle::from_points([a, b, c]).is_some()
+        };
+
+        if other_origin_is_not_on_self {
+            return false;
         }
+
+        let d1 = self.direction.normalize();
+        let d2 = other.direction.normalize();
+
+        d1 == d2 || d1 == -d2
     }
 
     /// Create a new instance that is reversed
@@ -82,10 +136,10 @@ impl<const D: usize> Line<D> {
 }
 
 impl<const D: usize> approx::AbsDiffEq for Line<D> {
-    type Epsilon = <f64 as approx::AbsDiffEq>::Epsilon;
+    type Epsilon = <Scalar as approx::AbsDiffEq>::Epsilon;
 
     fn default_epsilon() -> Self::Epsilon {
-        f64::default_epsilon()
+        Scalar::default_epsilon()
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
@@ -98,9 +152,22 @@ impl<const D: usize> approx::AbsDiffEq for Line<D> {
 mod tests {
     use approx::assert_abs_diff_eq;
 
-    use crate::{Point, Vector};
+    use crate::{Point, Scalar, Vector};
 
     use super::Line;
+
+    #[test]
+    fn is_coincident_with() {
+        let line = Line::from_points([[0., 0.], [1., 0.]]);
+
+        let a = Line::from_points([[0., 0.], [1., 0.]]);
+        let b = Line::from_points([[0., 0.], [-1., 0.]]);
+        let c = Line::from_points([[0., 1.], [1., 1.]]);
+
+        assert!(line.is_coincident_with(&a));
+        assert!(line.is_coincident_with(&b));
+        assert!(!line.is_coincident_with(&c));
+    }
 
     #[test]
     fn convert_point_to_line_coords() {
@@ -118,7 +185,11 @@ mod tests {
             let point = line.point_from_line_coords([t]);
             let t_result = line.point_to_line_coords(point);
 
-            assert_abs_diff_eq!(Point::from([t]), t_result, epsilon = 1e-8);
+            assert_abs_diff_eq!(
+                Point::from([t]),
+                t_result,
+                epsilon = Scalar::from(1e-8)
+            );
         }
     }
 }

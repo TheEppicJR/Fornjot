@@ -1,28 +1,29 @@
-use fj_interop::debug::DebugInfo;
+use fj_interop::{debug::DebugInfo, mesh::Color};
 use fj_kernel::{
-    algorithms::{sweep_shape, Tolerance},
-    shape::Shape,
+    algorithms::{sweep, Tolerance},
+    objects::Solid,
     validation::{validate, Validated, ValidationConfig, ValidationError},
 };
 use fj_math::{Aabb, Vector};
 
-use super::ToShape;
+use super::Shape;
 
-impl ToShape for fj::Sweep {
-    fn to_shape(
+impl Shape for fj::Sweep {
+    type Brep = Solid;
+
+    fn compute_brep(
         &self,
         config: &ValidationConfig,
         tolerance: Tolerance,
         debug_info: &mut DebugInfo,
-    ) -> Result<Validated<Shape>, ValidationError> {
-        let shape = self.shape().to_shape(config, tolerance, debug_info)?;
+    ) -> Result<Validated<Self::Brep>, ValidationError> {
+        let sketch =
+            self.shape().compute_brep(config, tolerance, debug_info)?;
         let path = Vector::from(self.path());
         let color = self.shape().color();
 
-        let swept = sweep_shape(shape.into_inner(), path, tolerance, color);
-        let swept = validate(swept, config)?;
-
-        Ok(swept)
+        let solid = sweep(sketch.into_inner(), path, tolerance, Color(color));
+        validate(solid, config)
     }
 
     fn bounding_volume(&self) -> Aabb<3> {

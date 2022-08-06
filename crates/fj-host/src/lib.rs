@@ -17,11 +17,13 @@
 
 mod platform;
 
+use fj_interop::status_report::StatusReport;
 use std::{
     collections::{HashMap, HashSet},
     ffi::OsStr,
     io,
-    path::PathBuf,
+    ops::{Deref, DerefMut},
+    path::{Path, PathBuf},
     process::Command,
     sync::mpsc,
     thread,
@@ -40,40 +42,34 @@ pub struct Model {
 }
 
 impl Model {
-    /// Initialize the model from a path
+    /// Initialize the model using the path to its crate (i.e. the folder
+    /// containing `Cargo.toml`).
     ///
     /// Optionally, the target directory where plugin files are compiled to can
     /// be provided. If it is not provided, the target directory is assumed to
     /// be located within the model path.
-    pub fn from_path(
-        path: PathBuf,
-        target_dir: Option<PathBuf>,
-    ) -> io::Result<Self> {
-        let name = {
-            // Can't panic. It only would, if the path ends with "..", and we
-            // are canonicalizing it here to prevent that.
-            let canonical = path.canonicalize()?;
-            let file_name = canonical
-                .file_name()
-                .expect("Expected path to be canonical");
+    pub fn from_path(path: PathBuf) -> Result<Self, Error> {
+        let crate_dir = path.canonicalize()?;
 
-            file_name.to_string_lossy().replace('-', "_")
-        };
+        let metadata = cargo_metadata::MetadataCommand::new()
+            .current_dir(&crate_dir)
+            .exec()?;
 
-        let src_path = path.join("src");
+        let pkg = package_associated_with_directory(&metadata, &crate_dir)?;
+        let src_path = crate_dir.join("src");
 
         let lib_path = {
+            let name = pkg.name.replace('-', "_");
             let file = HostPlatform::lib_file_name(&name);
-            let target_dir = target_dir.unwrap_or_else(|| path.join("target"));
+            let target_dir =
+                metadata.target_directory.clone().into_std_path_buf();
             target_dir.join("debug").join(file)
         };
-
-        let manifest_path = path.join("Cargo.toml");
 
         Ok(Self {
             src_path,
             lib_path,
-            manifest_path,
+            manifest_path: pkg.manifest_path.as_std_path().to_path_buf(),
         })
     }
 
@@ -87,15 +83,21 @@ impl Model {
     pub fn load_once(
         &self,
         arguments: &Parameters,
+        status: &mut StatusReport,
     ) -> Result<fj::Shape, Error> {
         let manifest_path = self.manifest_path.display().to_string();
 
-        let status = Command::new("cargo")
-            .arg("build")
-            .args(["--manifest-path", &manifest_path])
-            .status()?;
+        let mut command_root = Command::new("cargo");
 
-        if !status.success() {
+        let command = command_root
+            .arg("build")
+            .args(["--manifest-path", &manifest_path]);
+        let exit_status = command.status()?;
+
+        if exit_status.success() {
+            status.update_status("Model compiled successfully!");
+        } else {
+            status.update_status("Error compiling the model!");
             return Err(Error::Compile);
         }
 
@@ -208,6 +210,50 @@ impl Model {
     }
 }
 
+fn package_associated_with_directory<'m>(
+    metadata: &'m cargo_metadata::Metadata,
+    dir: &Path,
+) -> Result<&'m cargo_metadata::Package, Error> {
+    for pkg in metadata.workspace_packages() {
+        let crate_dir = pkg
+            .manifest_path
+            .parent()
+            .and_then(|p| p.canonicalize().ok());
+
+        if crate_dir.as_deref() == Some(dir) {
+            return Ok(pkg);
+        }
+    }
+
+    Err(ambiguous_path_error(metadata, dir))
+}
+
+fn ambiguous_path_error(
+    metadata: &cargo_metadata::Metadata,
+    dir: &Path,
+) -> Error {
+    let mut possible_paths = Vec::new();
+
+    for id in &metadata.workspace_members {
+        let cargo_toml = &metadata[id].manifest_path;
+        let crate_dir = cargo_toml
+            .parent()
+            .expect("A Cargo.toml always has a parent");
+        // Try to make the path relative to the workspace root so error messages
+        // aren't super long.
+        let simplified_path = crate_dir
+            .strip_prefix(&metadata.workspace_root)
+            .unwrap_or(crate_dir);
+
+        possible_paths.push(simplified_path.into());
+    }
+
+    Error::AmbiguousPath {
+        dir: dir.to_path_buf(),
+        possible_paths,
+    }
+}
+
 /// Watches a model for changes, reloading it continually
 pub struct Watcher {
     _watcher: Box<dyn notify::Watcher>,
@@ -221,16 +267,16 @@ impl Watcher {
     ///
     /// Returns `None`, if the model has not changed since the last time this
     /// method was called.
-    pub fn receive(&self) -> Option<fj::Shape> {
+    pub fn receive(&self, status: &mut StatusReport) -> Option<fj::Shape> {
         match self.channel.try_recv() {
             Ok(()) => {
-                let shape = match self.model.load_once(&self.parameters) {
+                let shape = match self.model.load_once(&self.parameters, status)
+                {
                     Ok(shape) => shape,
                     Err(Error::Compile) => {
                         // It would be better to display an error in the UI,
                         // where the user can actually see it. Issue:
                         // https://github.com/hannobraun/fornjot/issues/30
-                        println!("Error compiling model");
                         return None;
                     }
                     Err(err) => {
@@ -254,13 +300,39 @@ impl Watcher {
     }
 }
 
-/// Parameters that are passed to a model
+/// Parameters that are passed to a model.
+#[derive(Debug, Clone, PartialEq)]
 pub struct Parameters(pub HashMap<String, String>);
 
 impl Parameters {
     /// Construct an empty instance of `Parameters`
     pub fn empty() -> Self {
         Self(HashMap::new())
+    }
+
+    /// Insert a value into the [`Parameters`] dictionary, implicitly converting
+    /// the arguments to strings and returning `&mut self` to enable chaining.
+    pub fn insert(
+        &mut self,
+        key: impl Into<String>,
+        value: impl ToString,
+    ) -> &mut Self {
+        self.0.insert(key.into(), value.to_string());
+        self
+    }
+}
+
+impl Deref for Parameters {
+    type Target = HashMap<String, String>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Parameters {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
@@ -282,6 +354,28 @@ pub enum Error {
     /// Error while watching the model code for changes
     #[error("Error watching model for changes")]
     Notify(#[from] notify::Error),
+
+    /// An error occurred while trying to use evaluate
+    /// [`cargo_metadata::MetadataCommand`].
+    #[error("Unable to determine the crate's metadata")]
+    CargoMetadata(#[from] cargo_metadata::Error),
+
+    /// The user pointed us to a directory, but it doesn't look like that was
+    /// a crate root (i.e. the folder containing `Cargo.toml`).
+    #[error(
+        "It doesn't look like \"{}\" is a crate directory. Did you mean one of {}?",
+        dir.display(),
+        possible_paths.iter().map(|p| p.display().to_string())
+        .collect::<Vec<_>>()
+        .join(", ")
+    )]
+    AmbiguousPath {
+        /// The model directory supplied by the user.
+        dir: PathBuf,
+        /// The directories for each crate in the workspace, relative to the
+        /// workspace root.
+        possible_paths: Vec<PathBuf>,
+    },
 }
 
 type ModelFn = unsafe extern "C" fn(args: &Parameters) -> fj::Shape;

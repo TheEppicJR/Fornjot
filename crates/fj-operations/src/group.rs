@@ -1,31 +1,31 @@
 use fj_interop::debug::DebugInfo;
 use fj_kernel::{
     algorithms::Tolerance,
-    shape::Shape,
+    objects::Face,
     validation::{validate, Validated, ValidationConfig, ValidationError},
 };
 use fj_math::Aabb;
 
-use super::ToShape;
+use super::Shape;
 
-impl ToShape for fj::Group {
-    fn to_shape(
+impl Shape for fj::Group {
+    type Brep = Vec<Face>;
+
+    fn compute_brep(
         &self,
         config: &ValidationConfig,
         tolerance: Tolerance,
         debug_info: &mut DebugInfo,
-    ) -> Result<Validated<Shape>, ValidationError> {
-        let mut shape = Shape::new();
+    ) -> Result<Validated<Self::Brep>, ValidationError> {
+        let mut faces = Vec::new();
 
-        let a = self.a.to_shape(config, tolerance, debug_info)?;
-        let b = self.b.to_shape(config, tolerance, debug_info)?;
+        let a = self.a.compute_brep(config, tolerance, debug_info)?;
+        let b = self.b.compute_brep(config, tolerance, debug_info)?;
 
-        shape.merge_shape(&a);
-        shape.merge_shape(&b);
+        faces.extend(a.into_inner());
+        faces.extend(b.into_inner());
 
-        let shape = validate(shape, config)?;
-
-        Ok(shape)
+        validate(faces, config)
     }
 
     fn bounding_volume(&self) -> Aabb<3> {

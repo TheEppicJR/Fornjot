@@ -2,394 +2,279 @@
 
 use std::collections::VecDeque;
 
-use crate::{
-    objects::{Curve, Cycle, Edge, Face, Surface, Vertex},
-    shape::Shape,
+use crate::objects::{
+    Curve, Cycle, Edge, Face, GlobalCurve, GlobalVertex, Sketch, Solid,
+    Surface, Vertex,
 };
 
 /// Access iterators over all objects of a shape, or part of it
 ///
 /// Implemented for all object types. An implementation must return itself, in
 /// addition to any other objects it references.
-pub trait ObjectIters {
+pub trait ObjectIters<'r> {
+    /// Return all objects that this one references
+    fn referenced_objects(&'r self) -> Vec<&'r dyn ObjectIters>;
+
     /// Iterate over all curves
-    fn curve_iter(&self) -> Iter<Curve<3>>;
+    fn curve_iter(&'r self) -> Iter<&'r Curve> {
+        let mut iter = Iter::empty();
+
+        for object in self.referenced_objects() {
+            iter = iter.with(object.curve_iter());
+        }
+
+        iter
+    }
 
     /// Iterate over all cycles
-    fn cycle_iter(&self) -> Iter<Cycle<3>>;
+    fn cycle_iter(&'r self) -> Iter<&'r Cycle> {
+        let mut iter = Iter::empty();
+
+        for object in self.referenced_objects() {
+            iter = iter.with(object.cycle_iter());
+        }
+
+        iter
+    }
 
     /// Iterate over all edges
-    fn edge_iter(&self) -> Iter<Edge<3>>;
+    fn edge_iter(&'r self) -> Iter<&'r Edge> {
+        let mut iter = Iter::empty();
+
+        for object in self.referenced_objects() {
+            iter = iter.with(object.edge_iter());
+        }
+
+        iter
+    }
 
     /// Iterate over all faces
-    fn face_iter(&self) -> Iter<Face>;
+    fn face_iter(&'r self) -> Iter<&'r Face> {
+        let mut iter = Iter::empty();
+
+        for object in self.referenced_objects() {
+            iter = iter.with(object.face_iter());
+        }
+
+        iter
+    }
+
+    /// Iterate over all global curves
+    fn global_curve_iter(&'r self) -> Iter<&'r GlobalCurve> {
+        let mut iter = Iter::empty();
+
+        for object in self.referenced_objects() {
+            iter = iter.with(object.global_curve_iter());
+        }
+
+        iter
+    }
+
+    /// Iterate over all global vertices
+    fn global_vertex_iter(&'r self) -> Iter<&'r GlobalVertex> {
+        let mut iter = Iter::empty();
+
+        for object in self.referenced_objects() {
+            iter = iter.with(object.global_vertex_iter());
+        }
+
+        iter
+    }
+
+    /// Iterate over all sketches
+    fn sketch_iter(&'r self) -> Iter<&'r Sketch> {
+        let mut iter = Iter::empty();
+
+        for object in self.referenced_objects() {
+            iter = iter.with(object.sketch_iter());
+        }
+
+        iter
+    }
+
+    /// Iterate over all solids
+    fn solid_iter(&'r self) -> Iter<&'r Solid> {
+        let mut iter = Iter::empty();
+
+        for object in self.referenced_objects() {
+            iter = iter.with(object.solid_iter());
+        }
+
+        iter
+    }
 
     /// Iterate over all surfaces
-    fn surface_iter(&self) -> Iter<Surface>;
-
-    /// Iterate over all vertices
-    fn vertex_iter(&self) -> Iter<Vertex>;
-}
-
-impl ObjectIters for Curve<3> {
-    fn curve_iter(&self) -> Iter<Curve<3>> {
-        Iter::from_object(*self)
-    }
-
-    fn cycle_iter(&self) -> Iter<Cycle<3>> {
-        Iter::empty()
-    }
-
-    fn edge_iter(&self) -> Iter<Edge<3>> {
-        Iter::empty()
-    }
-
-    fn face_iter(&self) -> Iter<Face> {
-        Iter::empty()
-    }
-
-    fn surface_iter(&self) -> Iter<Surface> {
-        Iter::empty()
-    }
-
-    fn vertex_iter(&self) -> Iter<Vertex> {
-        Iter::empty()
-    }
-}
-
-impl ObjectIters for Cycle<3> {
-    fn curve_iter(&self) -> Iter<Curve<3>> {
+    fn surface_iter(&'r self) -> Iter<&'r Surface> {
         let mut iter = Iter::empty();
 
-        for edge in self.edges() {
-            iter = iter.with(edge.curve_iter());
+        for object in self.referenced_objects() {
+            iter = iter.with(object.surface_iter());
         }
 
         iter
     }
 
-    fn cycle_iter(&self) -> Iter<Cycle<3>> {
-        Iter::from_object(self.clone())
-    }
-
-    fn edge_iter(&self) -> Iter<Edge<3>> {
+    /// Iterator over all vertices
+    fn vertex_iter(&'r self) -> Iter<&'r Vertex> {
         let mut iter = Iter::empty();
 
-        for edge in self.edges() {
-            iter = iter.with(edge.edge_iter());
+        for object in self.referenced_objects() {
+            iter = iter.with(object.vertex_iter());
         }
 
         iter
     }
+}
 
-    fn face_iter(&self) -> Iter<Face> {
-        let mut iter = Iter::empty();
-
-        for edge in self.edges() {
-            iter = iter.with(edge.face_iter());
-        }
-
-        iter
+impl<'r> ObjectIters<'r> for Curve {
+    fn referenced_objects(&'r self) -> Vec<&'r dyn ObjectIters> {
+        vec![self.global() as &dyn ObjectIters]
     }
 
-    fn surface_iter(&self) -> Iter<Surface> {
-        let mut iter = Iter::empty();
-
-        for edge in self.edges() {
-            iter = iter.with(edge.surface_iter());
-        }
-
-        iter
+    fn curve_iter(&'r self) -> Iter<&'r Curve> {
+        Iter::from_object(self)
     }
+}
 
-    fn vertex_iter(&self) -> Iter<Vertex> {
-        let mut iter = Iter::empty();
+impl<'r> ObjectIters<'r> for Cycle {
+    fn referenced_objects(&'r self) -> Vec<&'r dyn ObjectIters> {
+        let mut objects = Vec::new();
 
         for edge in self.edges() {
-            iter = iter.with(edge.vertex_iter());
+            objects.push(edge as &dyn ObjectIters);
         }
 
-        iter
+        objects
+    }
+
+    fn cycle_iter(&'r self) -> Iter<&'r Cycle> {
+        Iter::from_object(self)
     }
 }
 
-impl ObjectIters for Edge<3> {
-    fn curve_iter(&self) -> Iter<Curve<3>> {
-        let mut iter = Iter::empty().with(self.curve().curve_iter());
+impl<'r> ObjectIters<'r> for Edge {
+    fn referenced_objects(&'r self) -> Vec<&'r dyn ObjectIters> {
+        let mut objects = vec![self.curve() as &dyn ObjectIters];
 
-        for vertex in self.vertices().into_iter().flatten() {
-            iter = iter.with(vertex.curve_iter());
+        for vertex in self.vertices().iter() {
+            objects.push(vertex);
         }
 
-        iter
+        objects
     }
 
-    fn cycle_iter(&self) -> Iter<Cycle<3>> {
-        let mut iter = Iter::empty().with(self.curve().cycle_iter());
-
-        for vertex in self.vertices().into_iter().flatten() {
-            iter = iter.with(vertex.cycle_iter());
-        }
-
-        iter
-    }
-
-    fn edge_iter(&self) -> Iter<Edge<3>> {
-        Iter::from_object(self.clone())
-    }
-
-    fn face_iter(&self) -> Iter<Face> {
-        let mut iter = Iter::empty().with(self.curve().face_iter());
-
-        for vertex in self.vertices().into_iter().flatten() {
-            iter = iter.with(vertex.face_iter());
-        }
-
-        iter
-    }
-
-    fn surface_iter(&self) -> Iter<Surface> {
-        let mut iter = Iter::empty().with(self.curve().surface_iter());
-
-        for vertex in self.vertices().into_iter().flatten() {
-            iter = iter.with(vertex.surface_iter());
-        }
-
-        iter
-    }
-
-    fn vertex_iter(&self) -> Iter<Vertex> {
-        let mut iter = Iter::empty().with(self.curve().vertex_iter());
-
-        for vertex in self.vertices().into_iter().flatten() {
-            iter = iter.with(vertex.vertex_iter());
-        }
-
-        iter
+    fn edge_iter(&'r self) -> Iter<&'r Edge> {
+        Iter::from_object(self)
     }
 }
 
-impl ObjectIters for Face {
-    fn curve_iter(&self) -> Iter<Curve<3>> {
-        if let Face::Face(face) = self {
-            let mut iter = Iter::empty().with(face.surface().curve_iter());
-
-            for cycle in face.all_cycles() {
-                iter = iter.with(cycle.curve_iter());
-            }
-
-            return iter;
+impl<'r> ObjectIters<'r> for Face {
+    fn referenced_objects(&'r self) -> Vec<&'r dyn ObjectIters> {
+        if self.triangles().is_some() {
+            return Vec::new();
         }
 
-        Iter::empty()
-    }
+        let mut objects = vec![self.surface() as &dyn ObjectIters];
 
-    fn cycle_iter(&self) -> Iter<Cycle<3>> {
-        if let Face::Face(face) = self {
-            let mut iter = Iter::empty().with(face.surface().cycle_iter());
-
-            for cycle in face.all_cycles() {
-                iter = iter.with(cycle.cycle_iter());
-            }
-
-            return iter;
+        for cycle in self.all_cycles() {
+            objects.push(cycle);
         }
 
-        Iter::empty()
+        objects
     }
 
-    fn edge_iter(&self) -> Iter<Edge<3>> {
-        if let Face::Face(face) = self {
-            let mut iter = Iter::empty().with(face.surface().edge_iter());
-
-            for cycle in face.all_cycles() {
-                iter = iter.with(cycle.edge_iter());
-            }
-
-            return iter;
-        }
-
-        Iter::empty()
-    }
-
-    fn face_iter(&self) -> Iter<Face> {
-        Iter::from_object(self.clone())
-    }
-
-    fn surface_iter(&self) -> Iter<Surface> {
-        if let Face::Face(face) = self {
-            let mut iter = Iter::empty().with(face.surface().surface_iter());
-
-            for cycle in face.all_cycles() {
-                iter = iter.with(cycle.surface_iter());
-            }
-
-            return iter;
-        }
-
-        Iter::empty()
-    }
-
-    fn vertex_iter(&self) -> Iter<Vertex> {
-        if let Face::Face(face) = self {
-            let mut iter = Iter::empty().with(face.surface().vertex_iter());
-
-            for cycle in face.all_cycles() {
-                iter = iter.with(cycle.vertex_iter());
-            }
-
-            return iter;
-        }
-
-        Iter::empty()
+    fn face_iter(&'r self) -> Iter<&'r Face> {
+        Iter::from_object(self)
     }
 }
 
-impl ObjectIters for Surface {
-    fn curve_iter(&self) -> Iter<Curve<3>> {
-        Iter::empty()
+impl<'r> ObjectIters<'r> for GlobalCurve {
+    fn referenced_objects(&'r self) -> Vec<&'r dyn ObjectIters> {
+        Vec::new()
     }
 
-    fn cycle_iter(&self) -> Iter<Cycle<3>> {
-        Iter::empty()
-    }
-
-    fn edge_iter(&self) -> Iter<Edge<3>> {
-        Iter::empty()
-    }
-
-    fn face_iter(&self) -> Iter<Face> {
-        Iter::empty()
-    }
-
-    fn surface_iter(&self) -> Iter<Surface> {
-        Iter::from_object(*self)
-    }
-
-    fn vertex_iter(&self) -> Iter<Vertex> {
-        Iter::empty()
+    fn global_curve_iter(&'r self) -> Iter<&'r GlobalCurve> {
+        Iter::from_object(self)
     }
 }
 
-impl ObjectIters for Vertex {
-    fn curve_iter(&self) -> Iter<Curve<3>> {
-        Iter::empty()
+impl<'r> ObjectIters<'r> for GlobalVertex {
+    fn referenced_objects(&'r self) -> Vec<&'r dyn ObjectIters> {
+        Vec::new()
     }
 
-    fn cycle_iter(&self) -> Iter<Cycle<3>> {
-        Iter::empty()
-    }
-
-    fn edge_iter(&self) -> Iter<Edge<3>> {
-        Iter::empty()
-    }
-
-    fn face_iter(&self) -> Iter<Face> {
-        Iter::empty()
-    }
-
-    fn surface_iter(&self) -> Iter<Surface> {
-        Iter::empty()
-    }
-
-    fn vertex_iter(&self) -> Iter<Vertex> {
-        Iter::from_object(*self)
+    fn global_vertex_iter(&'r self) -> Iter<&'r GlobalVertex> {
+        Iter::from_object(self)
     }
 }
 
-// This implementation exists to ease the transition away from `Shape`. It will
-// likely be removed at some point, together with `Shape`.
-impl ObjectIters for Shape {
-    fn curve_iter(&self) -> Iter<Curve<3>> {
-        Iter::from_iter(self.curves().map(|handle| handle.get()))
+impl<'r> ObjectIters<'r> for Sketch {
+    fn referenced_objects(&'r self) -> Vec<&'r dyn ObjectIters> {
+        let mut objects = Vec::new();
+
+        for face in self.faces() {
+            objects.push(face as &dyn ObjectIters);
+        }
+
+        objects
     }
 
-    fn cycle_iter(&self) -> Iter<Cycle<3>> {
-        Iter::from_iter(self.cycles().map(|handle| handle.get()))
-    }
-
-    fn edge_iter(&self) -> Iter<Edge<3>> {
-        Iter::from_iter(self.edges().map(|handle| handle.get()))
-    }
-
-    fn face_iter(&self) -> Iter<Face> {
-        Iter::from_iter(self.faces().map(|handle| handle.get()))
-    }
-
-    fn surface_iter(&self) -> Iter<Surface> {
-        Iter::from_iter(self.surfaces().map(|handle| handle.get()))
-    }
-
-    fn vertex_iter(&self) -> Iter<Vertex> {
-        Iter::from_iter(self.vertices().map(|handle| handle.get()))
+    fn sketch_iter(&'r self) -> Iter<&'r Sketch> {
+        Iter::from_object(self)
     }
 }
 
-// This implementation exists to paper over the lack of any "top-level" objects
-// that are an entry point into a shape (basically, the lack of `Sketch` and
-// `Solid`).
-impl<T> ObjectIters for T
+impl<'r> ObjectIters<'r> for Solid {
+    fn referenced_objects(&'r self) -> Vec<&'r dyn ObjectIters> {
+        let mut objects = Vec::new();
+
+        for face in self.faces() {
+            objects.push(face as &dyn ObjectIters);
+        }
+
+        objects
+    }
+
+    fn solid_iter(&'r self) -> Iter<&'r Solid> {
+        Iter::from_object(self)
+    }
+}
+
+impl<'r> ObjectIters<'r> for Surface {
+    fn referenced_objects(&'r self) -> Vec<&'r dyn ObjectIters> {
+        Vec::new()
+    }
+
+    fn surface_iter(&'r self) -> Iter<&'r Surface> {
+        Iter::from_object(self)
+    }
+}
+
+impl<'r> ObjectIters<'r> for Vertex {
+    fn referenced_objects(&'r self) -> Vec<&'r dyn ObjectIters> {
+        vec![self.global() as &dyn ObjectIters]
+    }
+
+    fn vertex_iter(&'r self) -> Iter<&'r Vertex> {
+        Iter::from_object(self)
+    }
+}
+
+// This implementation is useful for test code.
+impl<'r, T, O> ObjectIters<'r> for T
 where
-    for<'r> &'r T: IntoIterator<Item = &'r Face>,
+    T: 'r,
+    O: ObjectIters<'r> + 'r,
+    &'r T: IntoIterator<Item = &'r O>,
 {
-    fn curve_iter(&self) -> Iter<Curve<3>> {
-        let mut iter = Iter::empty();
+    fn referenced_objects(&'r self) -> Vec<&'r dyn ObjectIters> {
+        let mut objects = Vec::new();
 
-        for face in self.into_iter() {
-            iter = iter.with(face.curve_iter());
+        for object in self.into_iter() {
+            objects.push(object as &dyn ObjectIters);
         }
 
-        iter
-    }
-
-    fn cycle_iter(&self) -> Iter<Cycle<3>> {
-        let mut iter = Iter::empty();
-
-        for face in self.into_iter() {
-            iter = iter.with(face.cycle_iter());
-        }
-
-        iter
-    }
-
-    fn edge_iter(&self) -> Iter<Edge<3>> {
-        let mut iter = Iter::empty();
-
-        for face in self.into_iter() {
-            iter = iter.with(face.edge_iter());
-        }
-
-        iter
-    }
-
-    fn face_iter(&self) -> Iter<Face> {
-        let mut iter = Iter::empty();
-
-        for face in self.into_iter() {
-            iter = iter.with(face.face_iter());
-        }
-
-        iter
-    }
-
-    fn surface_iter(&self) -> Iter<Surface> {
-        let mut iter = Iter::empty();
-
-        for face in self.into_iter() {
-            iter = iter.with(face.surface_iter());
-        }
-
-        iter
-    }
-
-    fn vertex_iter(&self) -> Iter<Vertex> {
-        let mut iter = Iter::empty();
-
-        for face in self.into_iter() {
-            iter = iter.with(face.vertex_iter());
-        }
-
-        iter
+        objects
     }
 }
 
@@ -406,12 +291,6 @@ impl<T> Iter<T> {
     fn from_object(object: T) -> Self {
         let mut objects = VecDeque::new();
         objects.push_back(object);
-        Self(objects)
-    }
-
-    fn from_iter(iter: impl IntoIterator<Item = T>) -> Self {
-        let mut objects = VecDeque::new();
-        objects.extend(iter);
         Self(objects)
     }
 
@@ -439,96 +318,164 @@ impl<T> Iterator for Iter<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        objects::{Curve, Cycle, Edge, Face, Surface, Vertex},
-        shape::Shape,
+    use crate::objects::{
+        Cycle, Edge, Face, GlobalCurve, GlobalVertex, Sketch, Solid, Surface,
+        Vertex,
     };
 
     use super::ObjectIters as _;
 
     #[test]
-    fn curve() {
-        let curve = Curve::x_axis();
-
-        assert_eq!(1, curve.curve_iter().count());
-        assert_eq!(0, curve.cycle_iter().count());
-        assert_eq!(0, curve.edge_iter().count());
-        assert_eq!(0, curve.face_iter().count());
-        assert_eq!(0, curve.surface_iter().count());
-        assert_eq!(0, curve.vertex_iter().count());
-    }
-
-    #[test]
     fn cycle() {
-        let mut shape = Shape::new();
-        let cycle = Cycle::builder(Surface::xy_plane(), &mut shape)
-            .build_polygon([[0., 0.], [1., 0.], [0., 1.]])
-            .canonical()
-            .get();
+        let object = Cycle::build(Surface::xy_plane()).polygon_from_points([
+            [0., 0.],
+            [1., 0.],
+            [0., 1.],
+        ]);
 
-        assert_eq!(3, cycle.curve_iter().count());
-        assert_eq!(1, cycle.cycle_iter().count());
-        assert_eq!(3, cycle.edge_iter().count());
-        assert_eq!(0, cycle.face_iter().count());
-        assert_eq!(0, cycle.surface_iter().count());
-        assert_eq!(3, cycle.vertex_iter().count());
+        assert_eq!(1, object.cycle_iter().count());
+        assert_eq!(3, object.edge_iter().count());
+        assert_eq!(0, object.face_iter().count());
+        assert_eq!(3, object.global_curve_iter().count());
+        assert_eq!(3, object.global_vertex_iter().count());
+        assert_eq!(0, object.sketch_iter().count());
+        assert_eq!(0, object.solid_iter().count());
+        assert_eq!(0, object.surface_iter().count());
+        assert_eq!(6, object.vertex_iter().count());
     }
 
     #[test]
     fn edge() {
-        let mut shape = Shape::new();
-        let edge = Edge::builder(&mut shape)
-            .build_line_segment_from_points([[0., 0., 0.], [1., 0., 0.]])
-            .get();
+        let object = Edge::build().line_segment_from_points(
+            &Surface::xy_plane(),
+            [[0., 0.], [1., 0.]],
+        );
 
-        assert_eq!(1, edge.curve_iter().count());
-        assert_eq!(0, edge.cycle_iter().count());
-        assert_eq!(1, edge.edge_iter().count());
-        assert_eq!(0, edge.face_iter().count());
-        assert_eq!(0, edge.surface_iter().count());
-        assert_eq!(2, edge.vertex_iter().count());
+        assert_eq!(0, object.cycle_iter().count());
+        assert_eq!(1, object.edge_iter().count());
+        assert_eq!(0, object.face_iter().count());
+        assert_eq!(1, object.global_curve_iter().count());
+        assert_eq!(2, object.global_vertex_iter().count());
+        assert_eq!(0, object.sketch_iter().count());
+        assert_eq!(0, object.solid_iter().count());
+        assert_eq!(0, object.surface_iter().count());
+        assert_eq!(2, object.vertex_iter().count());
     }
 
     #[test]
     fn face() {
-        let mut shape = Shape::new();
-        let face = Face::builder(Surface::xy_plane(), &mut shape)
-            .with_exterior_polygon([[0., 0.], [1., 0.], [0., 1.]])
-            .build()
-            .get();
+        let surface = Surface::xy_plane();
+        let object = Face::build(surface).polygon_from_points([
+            [0., 0.],
+            [1., 0.],
+            [0., 1.],
+        ]);
 
-        assert_eq!(3, face.curve_iter().count());
-        assert_eq!(1, face.cycle_iter().count());
-        assert_eq!(3, face.edge_iter().count());
-        assert_eq!(1, face.face_iter().count());
-        assert_eq!(1, face.surface_iter().count());
-        assert_eq!(3, face.vertex_iter().count());
+        assert_eq!(1, object.cycle_iter().count());
+        assert_eq!(3, object.edge_iter().count());
+        assert_eq!(1, object.face_iter().count());
+        assert_eq!(3, object.global_curve_iter().count());
+        assert_eq!(3, object.global_vertex_iter().count());
+        assert_eq!(0, object.sketch_iter().count());
+        assert_eq!(0, object.solid_iter().count());
+        assert_eq!(1, object.surface_iter().count());
+        assert_eq!(6, object.vertex_iter().count());
+    }
+
+    #[test]
+    fn global_curve() {
+        let object = GlobalCurve::build().x_axis();
+
+        assert_eq!(0, object.cycle_iter().count());
+        assert_eq!(0, object.edge_iter().count());
+        assert_eq!(0, object.face_iter().count());
+        assert_eq!(1, object.global_curve_iter().count());
+        assert_eq!(0, object.global_vertex_iter().count());
+        assert_eq!(0, object.sketch_iter().count());
+        assert_eq!(0, object.solid_iter().count());
+        assert_eq!(0, object.surface_iter().count());
+        assert_eq!(0, object.vertex_iter().count());
+    }
+
+    #[test]
+    fn global_vertex() {
+        let object = GlobalVertex::from_position([0., 0., 0.]);
+
+        assert_eq!(0, object.cycle_iter().count());
+        assert_eq!(0, object.edge_iter().count());
+        assert_eq!(0, object.face_iter().count());
+        assert_eq!(0, object.global_curve_iter().count());
+        assert_eq!(1, object.global_vertex_iter().count());
+        assert_eq!(0, object.sketch_iter().count());
+        assert_eq!(0, object.solid_iter().count());
+        assert_eq!(0, object.surface_iter().count());
+        assert_eq!(0, object.vertex_iter().count());
+    }
+
+    #[test]
+    fn sketch() {
+        let surface = Surface::xy_plane();
+        let face = Face::build(surface).polygon_from_points([
+            [0., 0.],
+            [1., 0.],
+            [0., 1.],
+        ]);
+        let object = Sketch::new().with_faces([face]);
+
+        assert_eq!(1, object.cycle_iter().count());
+        assert_eq!(3, object.edge_iter().count());
+        assert_eq!(1, object.face_iter().count());
+        assert_eq!(3, object.global_curve_iter().count());
+        assert_eq!(3, object.global_vertex_iter().count());
+        assert_eq!(1, object.sketch_iter().count());
+        assert_eq!(0, object.solid_iter().count());
+        assert_eq!(1, object.surface_iter().count());
+        assert_eq!(6, object.vertex_iter().count());
+    }
+
+    #[test]
+    fn solid() {
+        let object = Solid::build().cube_from_edge_length(1.);
+
+        assert_eq!(6, object.cycle_iter().count());
+        assert_eq!(20, object.edge_iter().count());
+        assert_eq!(6, object.face_iter().count());
+        assert_eq!(18, object.global_curve_iter().count());
+        assert_eq!(8, object.global_vertex_iter().count());
+        assert_eq!(0, object.sketch_iter().count());
+        assert_eq!(1, object.solid_iter().count());
+        assert_eq!(6, object.surface_iter().count());
+        assert_eq!(16, object.vertex_iter().count());
     }
 
     #[test]
     fn surface() {
-        let surface = Surface::xy_plane();
+        let object = Surface::xy_plane();
 
-        assert_eq!(0, surface.curve_iter().count());
-        assert_eq!(0, surface.cycle_iter().count());
-        assert_eq!(0, surface.edge_iter().count());
-        assert_eq!(0, surface.face_iter().count());
-        assert_eq!(1, surface.surface_iter().count());
-        assert_eq!(0, surface.vertex_iter().count());
+        assert_eq!(0, object.cycle_iter().count());
+        assert_eq!(0, object.edge_iter().count());
+        assert_eq!(0, object.face_iter().count());
+        assert_eq!(0, object.global_curve_iter().count());
+        assert_eq!(0, object.global_vertex_iter().count());
+        assert_eq!(0, object.sketch_iter().count());
+        assert_eq!(0, object.solid_iter().count());
+        assert_eq!(1, object.surface_iter().count());
+        assert_eq!(0, object.vertex_iter().count());
     }
 
     #[test]
     fn vertex() {
-        let mut shape = Shape::new();
-        let vertex = Vertex::builder(&mut shape)
-            .build_from_point([0., 0., 0.])
-            .get();
+        let global_vertex = GlobalVertex::from_position([0., 0., 0.]);
+        let object = Vertex::new([0.], global_vertex);
 
-        assert_eq!(0, vertex.curve_iter().count());
-        assert_eq!(0, vertex.cycle_iter().count());
-        assert_eq!(0, vertex.edge_iter().count());
-        assert_eq!(0, vertex.face_iter().count());
-        assert_eq!(0, vertex.surface_iter().count());
-        assert_eq!(1, vertex.vertex_iter().count());
+        assert_eq!(0, object.cycle_iter().count());
+        assert_eq!(0, object.edge_iter().count());
+        assert_eq!(0, object.face_iter().count());
+        assert_eq!(0, object.global_curve_iter().count());
+        assert_eq!(1, object.global_vertex_iter().count());
+        assert_eq!(0, object.sketch_iter().count());
+        assert_eq!(0, object.solid_iter().count());
+        assert_eq!(0, object.surface_iter().count());
+        assert_eq!(1, object.vertex_iter().count());
     }
 }

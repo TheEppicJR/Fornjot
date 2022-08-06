@@ -1,8 +1,60 @@
-use std::fmt;
-
 use fj_math::{Circle, Line, Point, Transform, Vector};
 
-use crate::geometry;
+use crate::builder::{CurveBuilder, GlobalCurveBuilder};
+
+use super::Surface;
+
+/// A curve, defined in local surface coordinates
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
+pub struct Curve {
+    kind: CurveKind<2>,
+    global: GlobalCurve,
+}
+
+impl Curve {
+    /// Build a curve using [`CurveBuilder`]
+    pub fn build(surface: Surface) -> CurveBuilder {
+        CurveBuilder::new(surface)
+    }
+
+    /// Construct a new instance of `Curve`
+    pub fn new(kind: CurveKind<2>, global: GlobalCurve) -> Self {
+        Self { kind, global }
+    }
+
+    /// Access the kind of this curve
+    pub fn kind(&self) -> &CurveKind<2> {
+        &self.kind
+    }
+
+    /// Access the global form of this curve
+    pub fn global(&self) -> &GlobalCurve {
+        &self.global
+    }
+}
+
+/// A curve, defined in global (3D) coordinates
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
+pub struct GlobalCurve {
+    kind: CurveKind<3>,
+}
+
+impl GlobalCurve {
+    /// Build a curve using [`GlobalCurveBuilder`]
+    pub fn build() -> GlobalCurveBuilder {
+        GlobalCurveBuilder
+    }
+
+    /// Construct a `GlobalCurve` from a [`CurveKind<3>`]
+    pub fn from_kind(kind: CurveKind<3>) -> Self {
+        Self { kind }
+    }
+
+    /// Access the kind of this curve
+    pub fn kind(&self) -> &CurveKind<3> {
+        &self.kind
+    }
+}
 
 /// A one-dimensional shape
 ///
@@ -18,7 +70,7 @@ use crate::geometry;
 /// Typically, only `2` or `3` make sense, which means the curve is defined on
 /// a surface or in a space, respectively.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
-pub enum Curve<const D: usize> {
+pub enum CurveKind<const D: usize> {
     /// A circle
     Circle(Circle<D>),
 
@@ -26,7 +78,7 @@ pub enum Curve<const D: usize> {
     Line(Line<D>),
 }
 
-impl<const D: usize> Curve<D> {
+impl<const D: usize> CurveKind<D> {
     /// Construct a line from two points
     pub fn line_from_points(points: [impl Into<Point<D>>; 2]) -> Self {
         Self::Line(Line::from_points(points))
@@ -35,8 +87,8 @@ impl<const D: usize> Curve<D> {
     /// Access the origin of the curve's coordinate system
     pub fn origin(&self) -> Point<D> {
         match self {
-            Self::Circle(curve) => curve.center,
-            Self::Line(curve) => curve.origin,
+            Self::Circle(curve) => curve.center(),
+            Self::Line(curve) => curve.origin(),
         }
     }
 
@@ -47,31 +99,6 @@ impl<const D: usize> Curve<D> {
             Self::Circle(curve) => Self::Circle(curve.reverse()),
             Self::Line(curve) => Self::Line(curve.reverse()),
         }
-    }
-
-    /// Convert a point in model coordinates to curve coordinates
-    ///
-    /// Projects the point onto the curve before computing curve coordinate.
-    /// This is done to make this method robust against floating point accuracy
-    /// issues.
-    ///
-    /// Callers are advised to be careful about the points they pass, as the
-    /// point not being on the curve, intentional or not, will never result in
-    /// an error.
-    pub fn point_to_curve_coords(
-        &self,
-        point: impl Into<Point<D>>,
-    ) -> geometry::Point<1, D> {
-        let point_canonical = point.into();
-
-        let point_local = match self {
-            Self::Circle(curve) => {
-                curve.point_to_circle_coords(point_canonical)
-            }
-            Self::Line(curve) => curve.point_to_line_coords(point_canonical),
-        };
-
-        geometry::Point::new(point_local, point_canonical)
     }
 
     /// Convert a point on the curve into model coordinates
@@ -97,66 +124,41 @@ impl<const D: usize> Curve<D> {
     }
 }
 
-impl Curve<2> {
-    /// Construct a `Curve` that represents the u-axis
-    pub fn u_axis() -> Self {
-        Self::Line(Line {
-            origin: Point::origin(),
-            direction: Vector::unit_u(),
-        })
-    }
-
-    /// Construct a `Curve` that represents the v-axis
-    pub fn v_axis() -> Self {
-        Self::Line(Line {
-            origin: Point::origin(),
-            direction: Vector::unit_v(),
-        })
-    }
-}
-
-impl Curve<3> {
+impl CurveKind<3> {
     /// Construct a `Curve` that represents the x-axis
     pub fn x_axis() -> Self {
-        Self::Line(Line {
-            origin: Point::origin(),
-            direction: Vector::unit_x(),
-        })
+        Self::Line(Line::from_origin_and_direction(
+            Point::origin(),
+            Vector::unit_x(),
+        ))
     }
 
     /// Construct a `Curve` that represents the y-axis
     pub fn y_axis() -> Self {
-        Self::Line(Line {
-            origin: Point::origin(),
-            direction: Vector::unit_y(),
-        })
+        Self::Line(Line::from_origin_and_direction(
+            Point::origin(),
+            Vector::unit_y(),
+        ))
     }
 
     /// Construct a `Curve` that represents the z-axis
     pub fn z_axis() -> Self {
-        Self::Line(Line {
-            origin: Point::origin(),
-            direction: Vector::unit_z(),
-        })
+        Self::Line(Line::from_origin_and_direction(
+            Point::origin(),
+            Vector::unit_z(),
+        ))
     }
 
-    /// Create a new instance that is transformed by `transform`
+    /// Transform the surface
     #[must_use]
     pub fn transform(self, transform: &Transform) -> Self {
         match self {
-            Self::Circle(curve) => {
-                Self::Circle(transform.transform_circle(&curve))
+            CurveKind::Circle(curve) => {
+                CurveKind::Circle(transform.transform_circle(&curve))
             }
-            Self::Line(curve) => Self::Line(transform.transform_line(&curve)),
-        }
-    }
-}
-
-impl<const D: usize> fmt::Display for Curve<D> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::Circle(curve) => write!(f, "{:?}", curve),
-            Self::Line(curve) => write!(f, "{:?}", curve),
+            CurveKind::Line(curve) => {
+                CurveKind::Line(transform.transform_line(&curve))
+            }
         }
     }
 }

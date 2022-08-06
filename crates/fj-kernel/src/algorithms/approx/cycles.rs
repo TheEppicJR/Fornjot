@@ -1,14 +1,14 @@
-use fj_math::Segment;
+use fj_math::{Point, Segment};
 
-use crate::{geometry, objects::Cycle};
+use crate::objects::Cycle;
 
-use super::{curves::approx_curve, edges::approx_edge, Tolerance};
+use super::{curves::approx_curve, edges::approx_edge, Local, Tolerance};
 
 /// An approximation of a [`Cycle`]
 #[derive(Debug, Eq, PartialEq, Hash)]
 pub struct CycleApprox {
     /// The points that approximate the cycle
-    pub points: Vec<geometry::Point<3, 3>>,
+    pub points: Vec<Local<Point<2>>>,
 }
 
 impl CycleApprox {
@@ -16,25 +16,26 @@ impl CycleApprox {
     ///
     /// `tolerance` defines how far the approximation is allowed to deviate from
     /// the actual face.
-    pub fn new(cycle: &Cycle<3>, tolerance: Tolerance) -> Self {
+    pub fn new(cycle: &Cycle, tolerance: Tolerance) -> Self {
         let mut points = Vec::new();
 
         for edge in cycle.edges() {
             let mut edge_points = Vec::new();
-            approx_curve(&edge.curve(), tolerance, &mut edge_points);
-            approx_edge(edge.vertices, &mut edge_points);
+            approx_curve(edge.curve().global(), tolerance, &mut edge_points);
+            approx_edge(*edge.vertices(), &mut edge_points);
 
-            points.extend(edge_points);
+            points.extend(edge_points.into_iter().map(|point| {
+                let local = edge
+                    .curve()
+                    .kind()
+                    .point_from_curve_coords(*point.local_form());
+                Local::new(local, *point.global_form())
+            }));
         }
 
-        let mut points: Vec<_> = points
-            .into_iter()
-            .map(|point| {
-                geometry::Point::new(point.canonical(), point.canonical())
-            })
-            .collect();
-
-        points.dedup();
+        // Can't just rely on `dedup`, as the conversion from curve coordinates
+        // could lead to subtly different surface coordinates.
+        points.dedup_by(|a, b| a.global_form() == b.global_form());
 
         Self { points }
     }
@@ -48,8 +49,8 @@ impl CycleApprox {
             // up, once `array_windows` is stable.
             let segment = [segment[0], segment[1]];
 
-            let segment = segment.map(|point| point.canonical());
-            segments.push(Segment::from(segment));
+            segments
+                .push(Segment::from(segment.map(|point| *point.global_form())));
         }
 
         segments

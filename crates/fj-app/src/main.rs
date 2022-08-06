@@ -23,9 +23,12 @@ mod project_manager;
 mod syntax_highlighting;
 mod window;
 
-// use anyhow::{anyhow, Context as _};
-// use fj_export::export;
-// use fj_host::{Model, Parameters};
+use std::path::PathBuf;
+
+use anyhow::{anyhow, Context as _};
+use fj_export::export;
+use fj_host::{Model, Parameters};
+use fj_interop::status_report::StatusReport;
 use fj_operations::shape_processor::ShapeProcessor;
 use tracing_subscriber::fmt::format;
 use tracing_subscriber::EnvFilter;
@@ -35,6 +38,7 @@ use crate::{
 };
 
 fn main() -> anyhow::Result<()> {
+    let mut status = StatusReport::new();
     // Respect `RUST_LOG`. If that's not defined or erroneous, log warnings and
     // above.
     //
@@ -50,14 +54,28 @@ fn main() -> anyhow::Result<()> {
 
     let args = Args::parse();
     let config = Config::load()?;
+
+    let mut path = config.default_path.unwrap_or_else(|| PathBuf::from(""));
+    let model = args.model.or(config.default_model).ok_or_else(|| {
+        anyhow!(
+            "No model specified, and no default model configured.\n\
+                Specify a model by passing `--model path/to/model`."
+        )
+    })?;
+    path.push(model);
+
+    let model = Model::from_path(path.clone())
+        .with_context(|| format!("Failed to load model: {}", path.display()))?;
+    let parameters = args.parameters.unwrap_or_else(Parameters::empty);
+
     let shape_processor = ShapeProcessor {
         tolerance: args.tolerance,
     };
     let project = Project::load_file(args, config);
 
-    // if let Some(path) = args.export {
-    //     let shape = model.load_once(&parameters)?;
-    //     let shape = shape_processor.process(&shape)?;
+    if let Some(path) = args.export {
+        let shape = model.load_once(&parameters, &mut status)?;
+        let shape = shape_processor.process(&shape)?;
 
     //     export(&shape.mesh, &path)?;
 

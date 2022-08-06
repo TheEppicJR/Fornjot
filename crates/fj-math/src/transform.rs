@@ -18,11 +18,11 @@ impl Transform {
     }
 
     /// Construct a translation
-    pub fn translation(vector: impl Into<Vector<3>>) -> Self {
-        let vector = vector.into();
+    pub fn translation(offset: impl Into<Vector<3>>) -> Self {
+        let offset = offset.into();
 
         Self(nalgebra::Transform::from_matrix_unchecked(
-            nalgebra::OMatrix::new_translation(&vector.to_na()),
+            nalgebra::OMatrix::new_translation(&offset.to_na()),
         ))
     }
 
@@ -57,10 +57,10 @@ impl Transform {
 
     /// Transform the given line
     pub fn transform_line(&self, line: &Line<3>) -> Line<3> {
-        Line {
-            origin: self.transform_point(&line.origin),
-            direction: self.transform_vector(&line.direction),
-        }
+        Line::from_origin_and_direction(
+            self.transform_point(&line.origin()),
+            self.transform_vector(&line.direction()),
+        )
     }
 
     /// Transform the given segment
@@ -81,11 +81,11 @@ impl Transform {
 
     /// Transform the given circle
     pub fn transform_circle(&self, circle: &Circle<3>) -> Circle<3> {
-        Circle {
-            center: self.transform_point(&circle.center),
-            a: self.transform_vector(&circle.a),
-            b: self.transform_vector(&circle.b),
-        }
+        Circle::new(
+            self.transform_point(&circle.center()),
+            self.transform_vector(&circle.a()),
+            self.transform_vector(&circle.b()),
+        )
     }
 
     /// Inverse transform
@@ -163,10 +163,10 @@ mod tests {
 
     #[test]
     fn transform() {
-        let line = Line {
-            origin: Point::from([1., 0., 0.]),
-            direction: Vector::from([0., 1., 0.]),
-        };
+        let line = Line::from_origin_and_direction(
+            Point::from([1., 0., 0.]),
+            Vector::from([0., 1., 0.]),
+        );
 
         let transform = Transform::translation([1., 2., 3.])
             * Transform::rotation(Vector::unit_z() * (Scalar::PI / 2.));
@@ -174,11 +174,11 @@ mod tests {
 
         assert_abs_diff_eq!(
             line,
-            Line {
-                origin: Point::from([1., 3., 3.]),
-                direction: Vector::from([-1., 0., 0.]),
-            },
-            epsilon = 1e-8,
+            Line::from_origin_and_direction(
+                Point::from([1., 3., 3.]),
+                Vector::from([-1., 0., 0.]),
+            ),
+            epsilon = Scalar::from(1e-8),
         );
     }
 

@@ -1,222 +1,158 @@
-use std::hash::{Hash, Hasher};
-
 use fj_interop::mesh::Color;
 use fj_math::Triangle;
 
-use crate::{
-    builder::FaceBuilder,
-    shape::{Handle, LocalForm, Shape},
-};
+use crate::builder::FaceBuilder;
 
 use super::{Cycle, Surface};
 
 /// A face of a shape
-///
-/// # Equality
-///
-/// Please refer to [`crate::kernel::topology`] for documentation on the
-/// equality of topological objects.
-///
-/// # Validation
-///
-/// A face that is part of a [`Shape`] must be structurally sound. That means
-/// the surface and any cycles it refers to, must be part of the same shape.
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
-pub enum Face {
-    /// A face of a shape
-    ///
-    /// A face is defined by a surface, and is bounded by edges that lie in that
-    /// surface.
-    Face(FaceBRep),
-
-    /// The triangles of the face
-    ///
-    /// Representing faces as a collection of triangles is a temporary state.
-    /// The plan is to eventually represent faces as a geometric surface,
-    /// bounded by edges. While the transition is being made, this variant is
-    /// still required.
-    Triangles(Vec<(Triangle<3>, Color)>),
+pub struct Face {
+    representation: Representation,
 }
 
 impl Face {
-    /// Construct a new instance of `Face`
-    pub fn new(
-        surface: Handle<Surface>,
-        exteriors: impl IntoIterator<Item = LocalForm<Cycle<2>, Cycle<3>>>,
-        interiors: impl IntoIterator<Item = LocalForm<Cycle<2>, Cycle<3>>>,
-        color: [u8; 4],
-    ) -> Self {
-        let exteriors = CyclesInFace::new(exteriors);
-        let interiors = CyclesInFace::new(interiors);
-
-        Self::Face(FaceBRep {
-            surface,
-            exteriors,
-            interiors,
-            color,
-        })
+    /// Build a face using [`FaceBuilder`]
+    pub fn build(surface: Surface) -> FaceBuilder {
+        FaceBuilder::new(surface)
     }
-    /// Build a face using the [`FaceBuilder`] API
-    pub fn builder(surface: Surface, shape: &mut Shape) -> FaceBuilder {
-        FaceBuilder::new(surface, shape)
+
+    /// Construct a new instance of `Face`
+    ///
+    /// Creates the face with no exteriors, no interiors and the default color.
+    /// This can be overridden using the `with_` methods.
+    pub fn new(surface: Surface) -> Self {
+        Self {
+            representation: Representation::BRep(BRep {
+                surface,
+                exteriors: Vec::new(),
+                interiors: Vec::new(),
+                color: Color::default(),
+            }),
+        }
+    }
+
+    /// Construct an instance that uses triangle representation
+    pub fn from_triangles(triangles: TriRep) -> Self {
+        Self {
+            representation: Representation::TriRep(triangles),
+        }
+    }
+
+    /// Add exterior cycles to the face
+    ///
+    /// Consumes the face and returns the updated instance.
+    pub fn with_exteriors(
+        mut self,
+        exteriors: impl IntoIterator<Item = Cycle>,
+    ) -> Self {
+        for exterior in exteriors.into_iter() {
+            self.brep_mut().exteriors.push(exterior);
+        }
+
+        self
+    }
+
+    /// Add interior cycles to the face
+    ///
+    /// Consumes the face and returns the updated instance.
+    pub fn with_interiors(
+        mut self,
+        interiors: impl IntoIterator<Item = Cycle>,
+    ) -> Self {
+        for interior in interiors.into_iter() {
+            self.brep_mut().interiors.push(interior);
+        }
+
+        self
+    }
+
+    /// Update the color of the face
+    ///
+    /// Consumes the face and returns the updated instance.
+    pub fn with_color(mut self, color: Color) -> Self {
+        self.brep_mut().color = color;
+        self
+    }
+
+    /// Access this face's surface
+    pub fn surface(&self) -> &Surface {
+        &self.brep().surface
+    }
+
+    /// Access the cycles that bound the face on the outside
+    pub fn exteriors(&self) -> impl Iterator<Item = &Cycle> + '_ {
+        self.brep().exteriors.iter()
+    }
+
+    /// Access the cycles that bound the face on the inside
+    ///
+    /// Each of these cycles defines a hole in the face.
+    pub fn interiors(&self) -> impl Iterator<Item = &Cycle> + '_ {
+        self.brep().interiors.iter()
+    }
+
+    /// Access all cycles of this face
+    ///
+    /// This is equivalent to chaining the iterators returned by
+    /// [`Face::exteriors`] and [`Face::interiors`].
+    pub fn all_cycles(&self) -> impl Iterator<Item = &Cycle> + '_ {
+        self.exteriors().chain(self.interiors())
+    }
+
+    /// Access the color of the face
+    pub fn color(&self) -> Color {
+        self.brep().color
+    }
+
+    /// Access triangles, if this face uses triangle representation
+    ///
+    /// Only some faces still use triangle representation. At some point, none
+    /// will. This method exists as a workaround, while the transition is still
+    /// in progress.
+    pub fn triangles(&self) -> Option<&TriRep> {
+        if let Representation::TriRep(triangles) = &self.representation {
+            return Some(triangles);
+        }
+
+        None
     }
 
     /// Access the boundary representation of the face
-    pub fn brep(&self) -> &FaceBRep {
-        match self {
-            Self::Face(face) => face,
-            _ => {
-                // No code that still uses triangle representation is calling
-                // this method.
-                unreachable!()
-            }
+    fn brep(&self) -> &BRep {
+        if let Representation::BRep(face) = &self.representation {
+            return face;
         }
+
+        // No code that still uses triangle representation is calling this
+        // method.
+        unreachable!()
     }
 
-    /// Access the surface that the face refers to
-    ///
-    /// This is a convenience method that saves the caller from dealing with the
-    /// [`Handle`].
-    pub fn surface(&self) -> Surface {
-        self.brep().surface()
-    }
-
-    /// Access the exterior cycles that the face refers to
-    ///
-    /// This is a convenience method that saves the caller from dealing with the
-    /// [`Handle`]s.
-    pub fn exteriors(&self) -> impl Iterator<Item = Cycle<3>> + '_ {
-        self.brep().exteriors()
-    }
-
-    /// Access the interior cycles that the face refers to
-    ///
-    /// This is a convenience method that saves the caller from dealing with the
-    /// [`Handle`]s.
-    pub fn interiors(&self) -> impl Iterator<Item = Cycle<3>> + '_ {
-        self.brep().interiors()
-    }
-
-    /// Access all cycles that the face refers to
-    ///
-    /// This is equivalent to chaining the iterators returned by
-    /// [`Face::exteriors`] and [`Face::interiors`].
-    pub fn all_cycles(&self) -> impl Iterator<Item = Cycle<3>> + '_ {
-        self.exteriors().chain(self.interiors())
-    }
-}
-
-/// The boundary representation of a face
-///
-/// This type exists to ease the handling of faces that use boundary
-/// representation. It will eventually be merged into `Face`, once
-/// `Face::Triangles` can finally be removed.
-#[derive(Clone, Debug, Eq, Ord, PartialOrd)]
-pub struct FaceBRep {
-    /// The surface that defines this face
-    pub surface: Handle<Surface>,
-
-    /// The cycles that bound the face on the outside
-    ///
-    /// # Implementation Note
-    ///
-    /// Since these cycles bound the face, the edges they consist of must
-    /// lie in the surface. The data we're using here is 3-dimensional
-    /// though, so no such limitation is enforced.
-    ///
-    /// It might be less error-prone to specify the cycles in surface
-    /// coordinates.
-    pub exteriors: CyclesInFace,
-
-    /// The cycles that bound the face on the inside
-    ///
-    /// Each of these cycles defines a hole in the face.
-    ///
-    /// # Implementation note
-    ///
-    /// See note on `exterior` field.
-    pub interiors: CyclesInFace,
-
-    /// The color of the face
-    pub color: [u8; 4],
-}
-
-impl FaceBRep {
-    /// Access the surface that the face refers to
-    ///
-    /// This is a convenience method that saves the caller from dealing with the
-    /// [`Handle`].
-    pub fn surface(&self) -> Surface {
-        self.surface.get()
-    }
-
-    /// Access the exterior cycles that the face refers to
-    ///
-    /// This is a convenience method that saves the caller from dealing with the
-    /// [`Handle`]s.
-    pub fn exteriors(&self) -> impl Iterator<Item = Cycle<3>> + '_ {
-        self.exteriors.as_canonical()
-    }
-
-    /// Access the interior cycles that the face refers to
-    ///
-    /// This is a convenience method that saves the caller from dealing with the
-    /// [`Handle`]s.
-    pub fn interiors(&self) -> impl Iterator<Item = Cycle<3>> + '_ {
-        self.interiors.as_canonical()
-    }
-
-    /// Access all cycles that the face refers to
-    ///
-    /// This is equivalent to chaining the iterators returned by
-    /// [`Face::exteriors`] and [`Face::interiors`].
-    pub fn all_cycles(&self) -> impl Iterator<Item = Cycle<3>> + '_ {
-        self.exteriors().chain(self.interiors())
-    }
-}
-
-impl PartialEq for FaceBRep {
-    fn eq(&self, other: &Self) -> bool {
-        self.surface() == other.surface()
-            && self.exteriors().eq(other.exteriors())
-            && self.interiors().eq(other.interiors())
-    }
-}
-
-impl Hash for FaceBRep {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.surface().hash(state);
-        for cycle in self.all_cycles() {
-            cycle.hash(state);
+    /// Access the boundary representation of the face mutably
+    fn brep_mut(&mut self) -> &mut BRep {
+        if let Representation::BRep(face) = &mut self.representation {
+            return face;
         }
+
+        // No code that still uses triangle representation is calling this
+        // method.
+        unreachable!()
     }
 }
 
-/// A list of cycles, as they are stored in `Face`
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
-pub struct CyclesInFace(Vec<LocalForm<Cycle<2>, Cycle<3>>>);
-
-impl CyclesInFace {
-    fn new(
-        cycles: impl IntoIterator<Item = LocalForm<Cycle<2>, Cycle<3>>>,
-    ) -> Self {
-        Self(cycles.into_iter().collect())
-    }
-
-    /// Access an iterator over the canonical forms of the cycles
-    pub fn as_canonical(&self) -> impl Iterator<Item = Cycle<3>> + '_ {
-        self.as_handle().map(|cycle| cycle.get())
-    }
-
-    /// Access an iterator over handles to the cycles
-    pub fn as_handle(&self) -> impl Iterator<Item = Handle<Cycle<3>>> + '_ {
-        self.0.iter().map(|cycle| cycle.canonical())
-    }
-
-    /// Access an iterator over local forms of the cycles
-    pub fn as_local_form(
-        &self,
-    ) -> impl Iterator<Item = &'_ LocalForm<Cycle<2>, Cycle<3>>> {
-        self.0.iter()
-    }
+enum Representation {
+    BRep(BRep),
+    TriRep(TriRep),
 }
+
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
+struct BRep {
+    surface: Surface,
+    exteriors: Vec<Cycle>,
+    interiors: Vec<Cycle>,
+    color: Color,
+}
+
+type TriRep = Vec<(Triangle<3>, Color)>;

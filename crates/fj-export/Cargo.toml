@@ -1,9 +1,12 @@
 [package]
 name = "fj-export"
-version = "0.6.0"
+version = "0.10.0"
 edition = "2021"
 
-description = "The world needs another CAD program."
+description = """\
+Early-stage, next-generation, code-first CAD application. Because the world \
+needs another CAD program.\
+"""
 readme = "../../README.md"
 homepage = "https://www.fornjot.app/"
 repository = "https://github.com/hannobraun/fornjot"
@@ -18,9 +21,9 @@ threemf = "0.3.1"
 stl = "0.2.1"
 
 [dependencies.fj-interop]
-version = "0.6.0"
+version = "0.10.0"
 path = "../fj-interop"
 
 [dependencies.fj-math]
-version = "0.6.0"
+version = "0.10.0"
 path = "../fj-math"
