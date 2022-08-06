@@ -68,7 +68,7 @@ pub struct Renderer {
 impl Renderer {
     /// Returns a new `Renderer`.
     pub async fn new(
-        screen: &impl Screen<Window = egui_winit::winit::window::Window>,
+        window: &impl Screen<Window = egui_winit::winit::window::Window>,
     ) -> Result<Self, InitError> {
         let instance = wgpu::Instance::new(wgpu::Backends::PRIMARY);
 
@@ -122,7 +122,7 @@ impl Renderer {
         //       Don't ask me how I know.
         //
 
-        let egui_winit_state = egui_winit::State::new(4096, screen.window());
+        let egui_winit_state = egui_winit::State::new(4096, window.window());
         let egui_context = egui::Context::default();
 
         // This is sound, as `window` is an object to create a surface upon.
@@ -427,7 +427,7 @@ impl Renderer {
             info
         }
 
-        if self.egui_options.show_original_ui {
+        if self.egui.options.show_original_ui {
             self.config_ui
                 .draw(
                     &self.device,
@@ -468,12 +468,12 @@ impl Renderer {
         //    It's still not the *latest* `egui` version though.
         //
 
-        let egui_input = self.egui_state.take_egui_input(window);
-        self.egui_context.begin_frame(egui_input);
+        let egui_input = self.egui.winit_state.take_egui_input(window);
+        self.egui.context.begin_frame(egui_input);
 
         // End the UI frame. We could now handle the output and draw the UI with the backend.
-        let egui_output = self.egui_context.end_frame();
-        let egui_paint_jobs = self.egui_context.tessellate(egui_output.shapes);
+        let egui_output = self.egui.context.end_frame();
+        let egui_paint_jobs = self.egui.context.tessellate(egui_output.shapes);
 
         // Upload all resources for the GPU.
         let egui_screen_descriptor = egui_wgpu::renderer::ScreenDescriptor {
@@ -509,7 +509,7 @@ impl Renderer {
         //     .unwrap();
 
         for (id, image_delta) in &egui_output.textures_delta.set {
-            self.egui_rpass.update_texture(
+            self.egui.rpass.update_texture(
                 &self.device,
                 &self.queue,
                 *id,
@@ -517,10 +517,10 @@ impl Renderer {
             );
         }
         for id in &egui_output.textures_delta.free {
-            self.egui_rpass.free_texture(id);
+            self.egui.rpass.free_texture(id);
         }
 
-        self.egui_rpass.update_buffers(
+        self.egui.rpass.update_buffers(
             &self.device,
             &self.queue,
             &egui_paint_jobs,
@@ -533,7 +533,7 @@ impl Renderer {
         //
         //       See: <https://docs.rs/egui_wgpu/0.17.0/egui_wgpu/struct.RenderPass.html#method.execute_with_renderpass>
 
-        self.egui_rpass.execute(
+        self.egui.rpass.execute(
             &mut encoder,
             &color_view,
             &egui_paint_jobs,

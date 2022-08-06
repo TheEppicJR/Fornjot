@@ -26,7 +26,7 @@ mod window;
 use std::path::PathBuf;
 
 use anyhow::{anyhow, Context as _};
-use fj_export::export;
+// use fj_export::export;
 use fj_host::{Model, Parameters};
 use fj_interop::status_report::StatusReport;
 use fj_operations::shape_processor::ShapeProcessor;
@@ -71,12 +71,12 @@ fn main() -> anyhow::Result<()> {
     let shape_processor = ShapeProcessor {
         tolerance: args.tolerance,
     };
-    let project = Project::load_file(args, config);
+    // let project = Project::load_file(args, config);
 
     if let Some(path) = args.export {
         let shape = model.load_once(&parameters, &mut status)?;
         let shape = shape_processor.process(&shape)?;
-
+    }
     //     export(&shape.mesh, &path)?;
 
     //     return Ok(());

@@ -11,7 +11,7 @@ use fj_operations::shape_processor::ShapeProcessor;
 use fj_viewer::{
     camera::Camera,
     graphics::{self, DrawConfig, Renderer},
-    input::{self, KeyState},
+    input,
     screen::{NormalizedPosition, Screen as _, Size},
     window::Window,
 };

@@ -27,8 +27,8 @@ impl Project {
             })?;
         path.push(loaded_model);
 
-        let loaded_model = Model::from_path(path.clone(), config.target_dir)
-            .with_context(|| {
+        let loaded_model =
+            Model::from_path(path.clone()).with_context(|| {
                 format!("Failed to load model: {}", path.display())
             })?;
         Ok(Project {
