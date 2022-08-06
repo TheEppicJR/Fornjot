@@ -1,13 +1,13 @@
 //! API for processing shapes
 
-use fj_interop::{debug::DebugInfo, mesh::Mesh};
+use fj_interop::{debug::DebugInfo, processed_shape::ProcessedShape};
 use fj_kernel::{
     algorithms::{triangulate, InvalidTolerance, Tolerance},
     validation::{ValidationConfig, ValidationError},
 };
-use fj_math::{Aabb, Point, Scalar};
+use fj_math::Scalar;
 
-use crate::ToShape as _;
+use crate::Shape as _;
 
 /// Processes an [`fj::Shape`] into a [`ProcessedShape`]
 pub struct ShapeProcessor {
@@ -40,12 +40,8 @@ impl ShapeProcessor {
 
         let config = ValidationConfig::default();
         let mut debug_info = DebugInfo::new();
-        let shape = shape
-            .to_shape(&config, tolerance, &mut debug_info)?
-            .faces()
-            .map(|handle| handle.get())
-            .collect();
-        let mesh = triangulate(shape, tolerance, &mut debug_info);
+        let shape = shape.compute_brep(&config, tolerance, &mut debug_info)?;
+        let mesh = triangulate(shape.into_inner(), tolerance, &mut debug_info);
 
         Ok(ProcessedShape {
             aabb,
@@ -53,20 +49,6 @@ impl ShapeProcessor {
             debug_info,
         })
     }
-}
-
-/// A processed shape
-///
-/// Created by [`ShapeProcessor::process`].
-pub struct ProcessedShape {
-    /// The axis-aligned bounding box of the shape
-    pub aabb: Aabb<3>,
-
-    /// The triangle mesh that approximates the original shape
-    pub mesh: Mesh<Point<3>>,
-
-    /// The debug info generated while processing the shape
-    pub debug_info: DebugInfo,
 }
 
 /// A shape processing error

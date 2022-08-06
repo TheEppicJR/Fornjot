@@ -1,7 +1,4 @@
-use crate::{
-    builder::CycleBuilder,
-    shape::{Handle, LocalForm, Shape},
-};
+use crate::builder::CycleBuilder;
 
 use super::{Edge, Surface};
 
@@ -10,40 +7,44 @@ use super::{Edge, Surface};
 /// The end of each edge in the cycle must connect to the beginning of the next
 /// edge. The end of the last edge must connect to the beginning of the first
 /// one.
-///
-/// # Equality
-///
-/// Please refer to [`crate::kernel::topology`] for documentation on the
-/// equality of topological objects.
-///
-/// # Validation
-///
-/// A cycle that is part of a [`Shape`] must be structurally sound. That means
-/// the edges it refers to, must be part of the same shape.
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
-pub struct Cycle<const D: usize> {
-    /// The edges that make up the cycle
-    pub edges: Vec<LocalForm<Edge<D>, Edge<3>>>,
+pub struct Cycle {
+    edges: Vec<Edge>,
 }
 
-impl Cycle<3> {
-    /// Construct a `Cycle`
-    pub fn new(edges: impl IntoIterator<Item = Handle<Edge<3>>>) -> Self {
-        let edges = edges.into_iter().map(LocalForm::canonical_only).collect();
-
-        Self { edges }
+impl Cycle {
+    /// Build a cycle using [`CycleBuilder`]
+    pub fn build(surface: Surface) -> CycleBuilder {
+        CycleBuilder::new(surface)
     }
 
-    /// Build a cycle using the [`CycleBuilder`] API
-    pub fn builder(surface: Surface, shape: &mut Shape) -> CycleBuilder {
-        CycleBuilder::new(surface, shape)
+    /// Create a new cycle
+    #[allow(clippy::new_without_default)]
+    pub fn new() -> Self {
+        // Implementation note:
+        // As I'm writing this, this constructor has no arguments. I expect it
+        // to take a `Surface` at some point. Remove the `#[allow(...)]`
+        // attribute then.
+        // - @hannobraun
+
+        Self { edges: Vec::new() }
     }
 
-    /// Access the edges that this cycle refers to
+    /// Add edges to the cycle
     ///
-    /// This is a convenience method that saves the caller from dealing with the
-    /// [`Handle`]s.
-    pub fn edges(&self) -> impl Iterator<Item = Edge<3>> + '_ {
-        self.edges.iter().map(|handle| handle.canonical().get())
+    /// Consumes the cycle and returns the updated instance.
+    pub fn with_edges(mut self, edges: impl IntoIterator<Item = Edge>) -> Self {
+        self.edges.extend(edges);
+        self
+    }
+
+    /// Access edges that make up the cycle
+    pub fn edges(&self) -> impl Iterator<Item = &Edge> + '_ {
+        self.edges.iter()
+    }
+
+    /// Consume the cycle and return its edges
+    pub fn into_edges(self) -> impl Iterator<Item = Edge> {
+        self.edges.into_iter()
     }
 }

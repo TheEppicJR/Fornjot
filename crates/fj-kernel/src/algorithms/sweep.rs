@@ -1,184 +1,181 @@
-use std::collections::HashMap;
-
-use fj_math::{Line, Scalar, Transform, Triangle, Vector};
+use fj_interop::mesh::Color;
+use fj_math::{Point, Scalar, Transform, Triangle, Vector};
 
 use crate::{
-    objects::{Curve, Cycle, Edge, Face, Surface, SweptCurve, Vertex},
-    shape::{Handle, LocalForm, Mapping, Shape},
+    iter::ObjectIters,
+    objects::{
+        Curve, CurveKind, Cycle, Edge, Face, GlobalCurve, GlobalVertex, Sketch,
+        Solid, Surface, Vertex, VerticesOfEdge,
+    },
 };
 
-use super::{transform_shape, CycleApprox, Tolerance};
+use super::{reverse_face, CycleApprox, Tolerance, TransformObject};
 
-/// Create a new shape by sweeping an existing one
-pub fn sweep_shape(
-    source: Shape,
-    path: Vector<3>,
+/// Create a solid by sweeping a sketch
+pub fn sweep(
+    source: Sketch,
+    path: impl Into<Vector<3>>,
     tolerance: Tolerance,
-    color: [u8; 4],
-) -> Shape {
-    let mut sweep = Sweep::init(source, path, tolerance, color);
-    sweep.create_top_and_bottom_faces();
-    sweep.create_side_faces();
+    color: Color,
+) -> Solid {
+    let path = path.into();
 
-    sweep.target
-}
+    let is_sweep_along_negative_direction =
+        path.dot(&Vector::from([0., 0., 1.])) < Scalar::ZERO;
 
-struct Sweep {
-    source: Shape,
-    target: Shape,
+    let mut target = Vec::new();
 
-    bottom: Shape,
-    top: Shape,
-
-    source_to_bottom: Mapping,
-    source_to_top: Mapping,
-
-    path: Vector<3>,
-    translation: Transform,
-    is_sweep_along_negative_direction: bool,
-
-    tolerance: Tolerance,
-    color: [u8; 4],
-}
-
-impl Sweep {
-    fn init(
-        source: Shape,
-        path: Vector<3>,
-        tolerance: Tolerance,
-        color: [u8; 4],
-    ) -> Self {
-        let target = Shape::new();
-
-        let (bottom, source_to_bottom) = source.clone_shape();
-        let (top, source_to_top) = source.clone_shape();
-
-        let translation = Transform::translation(path);
-        let is_sweep_along_negative_direction =
-            path.dot(&Vector::from([0., 0., 1.])) < Scalar::ZERO;
-
-        Self {
-            source,
-            target,
-
-            bottom,
-            top,
-
-            source_to_bottom,
-            source_to_top,
-
-            path,
-            translation,
+    for face in source.face_iter() {
+        create_bottom_faces(
+            face,
             is_sweep_along_negative_direction,
+            &mut target,
+        );
+        create_top_face(
+            face.clone(),
+            path,
+            is_sweep_along_negative_direction,
+            &mut target,
+        );
 
-            tolerance,
-            color,
-        }
-    }
-
-    fn create_top_and_bottom_faces(&mut self) {
-        if self.is_sweep_along_negative_direction {
-            reverse_surfaces(&mut self.top);
-        } else {
-            reverse_surfaces(&mut self.bottom);
-        }
-        transform_shape(&mut self.top, &self.translation);
-
-        self.target.merge_shape(&self.bottom);
-        self.target.merge_shape(&self.top);
-    }
-
-    fn create_side_faces(&mut self) {
-        for face_source in self.source.faces() {
-            let face_source = face_source.get();
-            let face_source = face_source.brep();
-
-            let cycles_source = face_source
-                .exteriors
-                .as_local_form()
-                .chain(face_source.interiors.as_local_form());
-
-            for cycle_source in cycles_source {
-                if cycle_source.canonical().get().edges.len() == 1 {
-                    // If there's only one edge in the cycle, it must be a
-                    // continuous edge that connects to itself. By sweeping
-                    // that, we create a continuous face.
-                    //
-                    // Continuous faces aren't currently supported by the
-                    // approximation code, and hence can't be triangulated. To
-                    // address that, we fall back to the old and almost obsolete
-                    // triangle representation to create the face.
-                    //
-                    // This is the last piece of code that still uses the
-                    // triangle representation.
-                    create_continuous_side_face_fallback(
-                        &cycle_source.canonical().get(),
-                        &self.translation,
-                        self.tolerance,
-                        self.color,
-                        &mut self.target,
+        for cycle in face.all_cycles() {
+            for edge in cycle.edges() {
+                if let Some(vertices) = edge.vertices().get() {
+                    create_non_continuous_side_face(
+                        path,
+                        is_sweep_along_negative_direction,
+                        vertices.map(|vertex| *vertex.global()),
+                        color,
+                        &mut target,
                     );
-
                     continue;
                 }
 
-                // If there's no continuous edge, we can create the non-
-                // continuous faces using boundary representation.
-
-                let mut vertex_bottom_to_edge = HashMap::new();
-
-                for edge_source in &cycle_source.local().edges {
-                    let edge_bottom =
-                        self.source_to_bottom.edge(&edge_source.canonical());
-                    let edge_top =
-                        self.source_to_top.edge(&edge_source.canonical());
-
-                    let surface = create_side_surface(self, &edge_bottom);
-
-                    let edge_bottom = LocalForm::new(
-                        Edge {
-                            curve: edge_source.local().curve.clone(),
-                            vertices: edge_bottom.get().vertices,
-                        },
-                        edge_bottom,
-                    );
-                    let edge_top = LocalForm::new(
-                        Edge {
-                            curve: edge_source.local().curve.clone(),
-                            vertices: edge_top.get().vertices,
-                        },
-                        edge_top,
-                    );
-
-                    let cycle = create_side_cycle(
-                        &mut self.target,
-                        self.path,
-                        edge_bottom,
-                        edge_top,
-                        &mut vertex_bottom_to_edge,
-                    );
-
-                    create_side_face(self, surface, cycle);
-                }
+                create_continuous_side_face(
+                    *edge,
+                    path,
+                    tolerance,
+                    color,
+                    &mut target,
+                );
             }
         }
     }
+
+    Solid::new().with_faces(target)
 }
 
-fn reverse_surfaces(shape: &mut Shape) {
-    shape
-        .update()
-        .update_all(|surface: &mut Surface| *surface = surface.reverse());
-}
-
-fn create_continuous_side_face_fallback(
-    cycle_source: &Cycle<3>,
-    translation: &Transform,
-    tolerance: Tolerance,
-    color: [u8; 4],
-    target: &mut Shape,
+fn create_bottom_faces(
+    face: &Face,
+    is_sweep_along_negative_direction: bool,
+    target: &mut Vec<Face>,
 ) {
-    let approx = CycleApprox::new(cycle_source, tolerance);
+    let face = if is_sweep_along_negative_direction {
+        face.clone()
+    } else {
+        reverse_face(face)
+    };
+
+    target.push(face);
+}
+
+fn create_top_face(
+    face: Face,
+    path: Vector<3>,
+    is_sweep_along_negative_direction: bool,
+    target: &mut Vec<Face>,
+) {
+    let mut face = face.translate(path);
+
+    if is_sweep_along_negative_direction {
+        face = reverse_face(&face);
+    };
+
+    target.push(face);
+}
+
+fn create_non_continuous_side_face(
+    path: Vector<3>,
+    is_sweep_along_negative_direction: bool,
+    vertices_bottom: [GlobalVertex; 2],
+    color: Color,
+    target: &mut Vec<Face>,
+) {
+    let vertices = {
+        let vertices_top = vertices_bottom.map(|vertex| {
+            let position = vertex.position() + path;
+            GlobalVertex::from_position(position)
+        });
+
+        let [[a, b], [c, d]] = [vertices_bottom, vertices_top];
+
+        if is_sweep_along_negative_direction {
+            [b, a, c, d]
+        } else {
+            [a, b, d, c]
+        }
+    };
+
+    let surface = {
+        let [a, b, _, c] = vertices.map(|vertex| vertex.position());
+        Surface::plane_from_points([a, b, c])
+    };
+
+    let cycle = {
+        let [a, b, c, d] = vertices;
+
+        let mut vertices =
+            vec![([0., 0.], a), ([1., 0.], b), ([1., 1.], c), ([0., 1.], d)];
+        if let Some(vertex) = vertices.first().cloned() {
+            vertices.push(vertex);
+        }
+
+        let mut edges = Vec::new();
+        for vertices in vertices.windows(2) {
+            // Can't panic, as we passed `2` to `windows`.
+            //
+            // Can be cleaned up, once `array_windows` is stable"
+            // https://doc.rust-lang.org/std/primitive.slice.html#method.array_windows
+            let [a, b] = [&vertices[0], &vertices[1]];
+
+            let curve = {
+                let local = CurveKind::line_from_points([a.0, b.0]);
+
+                let global = [a, b].map(|vertex| vertex.1.position());
+                let global =
+                    GlobalCurve::from_kind(CurveKind::line_from_points(global));
+
+                Curve::new(local, global)
+            };
+
+            let vertices = VerticesOfEdge::from_vertices([
+                Vertex::new(Point::from([0.]), a.1),
+                Vertex::new(Point::from([1.]), b.1),
+            ]);
+
+            let edge = Edge::new(curve, vertices);
+
+            edges.push(edge);
+        }
+
+        Cycle::new().with_edges(edges)
+    };
+
+    let face = Face::new(surface).with_exteriors([cycle]).with_color(color);
+    target.push(face);
+}
+
+fn create_continuous_side_face(
+    edge: Edge,
+    path: Vector<3>,
+    tolerance: Tolerance,
+    color: Color,
+    target: &mut Vec<Face>,
+) {
+    let translation = Transform::translation(path);
+
+    let cycle = Cycle::new().with_edges([edge]);
+    let approx = CycleApprox::new(&cycle, tolerance);
 
     let mut quads = Vec::new();
     for segment in approx.segments() {
@@ -197,207 +194,134 @@ fn create_continuous_side_face_fallback(
         side_face.push(([v0, v2, v3].into(), color));
     }
 
-    target.insert(Face::Triangles(side_face));
-}
-
-fn create_side_surface(
-    sweep: &Sweep,
-    edge_bottom: &Handle<Edge<3>>,
-) -> Surface {
-    let mut surface = Surface::SweptCurve(SweptCurve {
-        curve: edge_bottom.get().curve(),
-        path: sweep.path,
-    });
-
-    if sweep.is_sweep_along_negative_direction {
-        surface = surface.reverse();
-    }
-
-    surface
-}
-
-fn create_side_cycle(
-    target: &mut Shape,
-    path: Vector<3>,
-    edge_bottom: LocalForm<Edge<2>, Edge<3>>,
-    edge_top: LocalForm<Edge<2>, Edge<3>>,
-    vertex_bottom_to_edge: &mut HashMap<Handle<Vertex>, Handle<Edge<3>>>,
-) -> LocalForm<Cycle<2>, Cycle<3>> {
-    // Can't panic. We already ruled out the "continuous edge" case above, so
-    // these edges must have vertices.
-    let [vertices_bottom, vertices_top] = [&edge_bottom, &edge_top]
-        .map(|edge| edge.local().vertices.clone().expect_vertices());
-
-    // Can be simplified, once `zip` is stabilized:
-    // https://doc.rust-lang.org/std/primitive.array.html#method.zip
-    let [bot_a, bot_b] = vertices_bottom;
-    let [top_a, top_b] = vertices_top;
-    let vertices = [[bot_a, top_a], [bot_b, top_b]];
-
-    // Create (or retrieve from the cache, `vertex_bottom_to_edge`) side edges
-    // from the vertices of this source/bottom edge.
-    //
-    // Can be cleaned up, once `try_map` is stable:
-    // https://doc.rust-lang.org/std/primitive.array.html#method.try_map
-    let side_edges = vertices.map(|[vertex_bottom, vertex_top]| {
-        let edge_canonical = {
-            // We only need to create the edge, if it hasn't already been
-            // created for a neighboring side face. Let's check our cache, to
-            // see if that's the case.
-            let edge = vertex_bottom_to_edge
-                .get(&vertex_bottom.canonical())
-                .cloned();
-            if let Some(edge) = edge {
-                edge
-            } else {
-                let points_canonical =
-                    [vertex_bottom.clone(), vertex_top.clone()]
-                        .map(|vertex| vertex.canonical().get().point);
-
-                Edge::builder(target)
-                    .build_line_segment_from_points(points_canonical)
-            }
-        };
-
-        let vertices = [vertex_bottom.clone(), vertex_top];
-        let mut points_local =
-            vertices.map(|vertex| [vertex.local().t, Scalar::ZERO]);
-        points_local[1][1] = path.magnitude();
-
-        let edge_local = Edge {
-            curve: LocalForm::new(
-                Curve::Line(Line::from_points(points_local)),
-                edge_canonical.get().curve.canonical(),
-            ),
-            vertices: edge_canonical.get().vertices,
-        };
-
-        vertex_bottom_to_edge
-            .insert(vertex_bottom.canonical(), edge_canonical.clone());
-
-        LocalForm::new(edge_local, edge_canonical)
-    });
-    let [edge_side_a, edge_side_b] = side_edges;
-
-    let local = Cycle {
-        edges: vec![
-            edge_bottom.clone(),
-            edge_top.clone(),
-            edge_side_a.clone(),
-            edge_side_b.clone(),
-        ],
-    };
-    let canonical = target.merge(Cycle::new([
-        edge_bottom.canonical(),
-        edge_top.canonical(),
-        edge_side_a.canonical(),
-        edge_side_b.canonical(),
-    ]));
-
-    LocalForm::new(local, canonical)
-}
-
-fn create_side_face(
-    sweep: &mut Sweep,
-    surface: Surface,
-    cycle: LocalForm<Cycle<2>, Cycle<3>>,
-) {
-    let surface = sweep.target.insert(surface);
-
-    sweep.target.insert(Face::new(
-        surface,
-        vec![cycle],
-        Vec::new(),
-        sweep.color,
-    ));
+    target.push(Face::from_triangles(side_face));
 }
 
 #[cfg(test)]
 mod tests {
-    use fj_math::{Point, Scalar, Transform, Vector};
+    use fj_interop::mesh::Color;
+    use fj_math::{Point, Scalar, Vector};
 
     use crate::{
         algorithms::Tolerance,
-        objects::{Face, Surface},
-        shape::{Handle, Shape},
+        iter::ObjectIters,
+        objects::{Face, Sketch, Surface},
     };
 
-    use super::sweep_shape;
+    #[test]
+    fn bottom_positive() -> anyhow::Result<()> {
+        test_bottom_top(
+            [0., 0., 1.],
+            [[0., 0., 0.], [1., 0., 0.], [0., -1., 0.]],
+            [[0., 0.], [1., 0.], [0., -1.]],
+        )
+    }
 
     #[test]
-    fn sweep() -> anyhow::Result<()> {
+    fn bottom_negative() -> anyhow::Result<()> {
+        test_bottom_top(
+            [0., 0., -1.],
+            [[0., 0., 0.], [1., 0., 0.], [0., 1., 0.]],
+            [[0., 0.], [1., 0.], [0., 1.]],
+        )
+    }
+
+    #[test]
+    fn top_positive() -> anyhow::Result<()> {
+        test_bottom_top(
+            [0., 0., 1.],
+            [[0., 0., 1.], [1., 0., 1.], [0., 1., 1.]],
+            [[0., 0.], [1., 0.], [0., 1.]],
+        )
+    }
+
+    #[test]
+    fn top_negative() -> anyhow::Result<()> {
+        test_bottom_top(
+            [0., 0., -1.],
+            [[0., 0., -1.], [1., 0., -1.], [0., -1., -1.]],
+            [[0., 0.], [1., 0.], [0., -1.]],
+        )
+    }
+
+    #[test]
+    fn side_positive() -> anyhow::Result<()> {
+        test_side(
+            [0., 0., 1.],
+            [
+                [[0., 0., 0.], [1., 0., 0.], [0., 0., 1.]],
+                [[1., 0., 0.], [0., 1., 0.], [1., 0., 1.]],
+                [[0., 1., 0.], [0., 0., 0.], [0., 1., 1.]],
+            ],
+        )
+    }
+
+    #[test]
+    fn side_negative() -> anyhow::Result<()> {
+        test_side(
+            [0., 0., -1.],
+            [
+                [[0., 0., 0.], [0., 1., 0.], [0., 0., -1.]],
+                [[0., 1., 0.], [1., 0., 0.], [0., 1., -1.]],
+                [[1., 0., 0.], [0., 0., 0.], [1., 0., -1.]],
+            ],
+        )
+    }
+
+    fn test_side(
+        direction: impl Into<Vector<3>>,
+        expected_surfaces: [[impl Into<Point<3>>; 3]; 3],
+    ) -> anyhow::Result<()> {
+        test(
+            direction,
+            expected_surfaces,
+            [[0., 0.], [1., 0.], [1., 1.], [0., 1.]],
+        )
+    }
+
+    fn test_bottom_top(
+        direction: impl Into<Vector<3>>,
+        expected_surface: [impl Into<Point<3>>; 3],
+        expected_vertices: [impl Into<Point<2>>; 3],
+    ) -> anyhow::Result<()> {
+        test(direction, [expected_surface], expected_vertices)
+    }
+
+    fn test(
+        direction: impl Into<Vector<3>>,
+        expected_surfaces: impl IntoIterator<Item = [impl Into<Point<3>>; 3]>,
+        expected_vertices: impl IntoIterator<Item = impl Into<Point<2>>>,
+    ) -> anyhow::Result<()> {
         let tolerance = Tolerance::from_scalar(Scalar::ONE)?;
 
-        let sketch =
-            Triangle::new([[0., 0.], [1., 0.], [0., 1.]], 0.0f64, false);
+        let surface = Surface::xy_plane();
+        let face = Face::build(surface).polygon_from_points([
+            [0., 0.],
+            [1., 0.],
+            [0., 1.],
+        ]);
+        let sketch = Sketch::new().with_faces([face]);
 
-        let swept = sweep_shape(
-            sketch.shape,
-            Vector::from([0., 0., 1.]),
-            tolerance,
-            [255, 0, 0, 255],
-        );
+        let solid =
+            super::sweep(sketch, direction, tolerance, Color([255, 0, 0, 255]));
 
-        let bottom_face =
-            Triangle::new([[0., 0.], [1., 0.], [0., 1.]], 0.0f64, true)
-                .face
-                .get();
-        let top_face =
-            Triangle::new([[0., 0.], [1., 0.], [0., 1.]], 1.0f64, false)
-                .face
-                .get();
+        let expected_vertices: Vec<_> = expected_vertices
+            .into_iter()
+            .map(|vertex| vertex.into())
+            .collect();
 
-        let mut contains_bottom_face = false;
-        let mut contains_top_face = false;
+        let faces = expected_surfaces.into_iter().map(|surface| {
+            let surface = Surface::plane_from_points(surface);
 
-        for face in swept.faces() {
-            if face.get().clone() == bottom_face {
-                contains_bottom_face = true;
-            }
-            if face.get().clone() == top_face {
-                contains_top_face = true;
-            }
+            Face::build(surface)
+                .polygon_from_points(expected_vertices.clone())
+                .into_face()
+        });
+
+        for face in faces {
+            assert!(solid.face_iter().any(|f| f == &face));
         }
-
-        assert!(contains_bottom_face);
-        assert!(contains_top_face);
-
-        // Side faces are not tested, as those use triangle representation. The
-        // plan is to start testing them, as they are transitioned to b-rep.
 
         Ok(())
-    }
-
-    pub struct Triangle {
-        shape: Shape,
-        face: Handle<Face>,
-    }
-
-    impl Triangle {
-        fn new(
-            points: [impl Into<Point<2>>; 3],
-            z_offset: impl Into<Scalar>,
-            reverse: bool,
-        ) -> Self {
-            let mut shape = Shape::new();
-
-            let surface =
-                Surface::xy_plane().transform(&Transform::translation([
-                    Scalar::ZERO,
-                    Scalar::ZERO,
-                    z_offset.into(),
-                ]));
-            let face = Face::builder(surface, &mut shape)
-                .with_exterior_polygon(points)
-                .build();
-
-            if reverse {
-                shape.update().update_all(|surface: &mut Surface| {
-                    *surface = surface.reverse();
-                });
-            }
-
-            Self { shape, face }
-        }
     }
 }

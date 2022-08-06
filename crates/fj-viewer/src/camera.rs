@@ -1,10 +1,10 @@
 //! Viewer camera module
 use std::f64::consts::FRAC_PI_2;
 
-use fj_interop::mesh::Mesh;
-use fj_math::{Aabb, Point, Scalar, Transform, Triangle, Vector};
+use fj_interop::processed_shape::ProcessedShape;
+use fj_math::{Aabb, Point, Scalar, Transform, Vector};
 
-use crate::screen::{Position, Size};
+use crate::screen::NormalizedPosition;
 
 /// The camera abstraction
 ///
@@ -104,24 +104,15 @@ impl Camera {
             .inverse_transform_point(&Point::<3>::origin())
     }
 
-    /// Transform the position of the cursor on the near plane to model space.
+    /// Transform a normalized cursor position on the near plane to model space.
     pub fn cursor_to_model_space(
         &self,
-        cursor: Position,
-        size: Size,
+        cursor: NormalizedPosition,
     ) -> Point<3> {
-        let [width, height] = size.as_f64();
-        let aspect_ratio = width / height;
-
-        // Cursor position in normalized coordinates (-1 to +1) with
-        // aspect ratio taken into account.
-        let x = cursor.x / width * 2. - 1.;
-        let y = -(cursor.y / height * 2. - 1.) / aspect_ratio;
-
         // Cursor position in camera space.
         let f = (self.field_of_view_in_x() / 2.).tan() * self.near_plane();
-        let cursor =
-            Point::origin() + Vector::from([x * f, y * f, -self.near_plane()]);
+        let cursor = Point::origin()
+            + Vector::from([cursor.x * f, cursor.y * f, -self.near_plane()]);
 
         self.camera_to_model().inverse_transform_point(&cursor)
     }
@@ -129,29 +120,30 @@ impl Camera {
     /// Compute the point on the model, that the cursor currently points to.
     pub fn focus_point(
         &self,
-        size: Size,
-        cursor: Option<Position>,
-        mesh: &Mesh<fj_math::Point<3>>,
+        cursor: Option<NormalizedPosition>,
+        shape: &ProcessedShape,
     ) -> FocusPoint {
-        let cursor = match cursor {
-            Some(cursor) => cursor,
-            None => return FocusPoint::none(),
-        };
+        self.calculate_focus_point(cursor, shape)
+            .unwrap_or_else(|| FocusPoint(shape.aabb.center()))
+    }
 
+    fn calculate_focus_point(
+        &self,
+        cursor: Option<NormalizedPosition>,
+        shape: &ProcessedShape,
+    ) -> Option<FocusPoint> {
         // Transform camera and cursor positions to model space.
         let origin = self.position();
-        let cursor = self.cursor_to_model_space(cursor, size);
+        let cursor = self.cursor_to_model_space(cursor?);
         let dir = (cursor - origin).normalize();
 
         let mut min_t = None;
 
-        for triangle in mesh.triangles() {
-            let t = Triangle::from_points(triangle.points).cast_local_ray(
-                origin,
-                dir,
-                f64::INFINITY,
-                true,
-            );
+        for triangle in shape.mesh.triangles() {
+            let t =
+                triangle
+                    .inner
+                    .cast_local_ray(origin, dir, f64::INFINITY, true);
 
             if let Some(t) = t {
                 if t <= min_t.unwrap_or(t) {
@@ -160,7 +152,7 @@ impl Camera {
             }
         }
 
-        FocusPoint(min_t.map(|t| origin + dir * t))
+        Some(FocusPoint(origin + dir * min_t?))
     }
 
     /// Access the transform from camera to model space.
@@ -221,17 +213,9 @@ impl Camera {
     }
 }
 
-/// The point on the model that the cursor is currently pointing at.
+/// The point around which camera movement happens.
 ///
-/// Such a point might or might not exist, depending on whether the cursor is
-/// pointing at the model or not.
-pub struct FocusPoint(pub Option<Point<3>>);
-
-impl FocusPoint {
-    /// Construct the "none" instance of `FocusPoint`
-    ///
-    /// This instance represents the case that no focus point exists.
-    pub fn none() -> Self {
-        Self(None)
-    }
-}
+/// This will be the point on the model that the cursor is currently pointing at if such a point exists,
+/// falling back to the center point of the model's bounding volume otherwise.
+#[derive(Clone, Copy)]
+pub struct FocusPoint(pub Point<3>);

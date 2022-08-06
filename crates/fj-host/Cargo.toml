@@ -1,9 +1,12 @@
 [package]
 name = "fj-host"
-version = "0.6.0"
+version = "0.10.0"
 edition = "2021"
 
-description = "The world needs another CAD program."
+description = """\
+Early-stage, next-generation, code-first CAD application. Because the world \
+needs another CAD program.\
+"""
 readme = "../../README.md"
 homepage = "https://www.fornjot.app/"
 repository = "https://github.com/hannobraun/fornjot"
@@ -16,7 +19,12 @@ categories = ["encoding", "mathematics", "rendering"]
 libloading = "0.7.2"
 notify = "5.0.0-pre.11"
 thiserror = "1.0.31"
+cargo_metadata = "0.15.0"
 
 [dependencies.fj]
-version = "0.6.0"
+version = "0.10.0"
 path = "../fj"
+
+[dependencies.fj-interop]
+version = "0.10.0"
+path = "../fj-interop"

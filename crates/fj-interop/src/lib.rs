@@ -16,3 +16,5 @@
 
 pub mod debug;
 pub mod mesh;
+pub mod processed_shape;
+pub mod status_report;

@@ -1,8 +1,6 @@
 use fj_math::{Line, Point, Transform, Vector};
 
-use crate::geometry;
-
-use super::Curve;
+use super::CurveKind;
 
 /// A two-dimensional shape
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
@@ -15,7 +13,7 @@ impl Surface {
     /// Construct a `Surface` that represents the xy-plane
     pub fn xy_plane() -> Self {
         Self::SweptCurve(SweptCurve {
-            curve: Curve::x_axis(),
+            curve: CurveKind::x_axis(),
             path: Vector::unit_y(),
         })
     }
@@ -23,7 +21,7 @@ impl Surface {
     /// Construct a `Surface` that represents the xz-plane
     pub fn xz_plane() -> Self {
         Self::SweptCurve(SweptCurve {
-            curve: Curve::x_axis(),
+            curve: CurveKind::x_axis(),
             path: Vector::unit_z(),
         })
     }
@@ -31,7 +29,7 @@ impl Surface {
     /// Construct a `Surface` that represents the yz-plane
     pub fn yz_plane() -> Self {
         Self::SweptCurve(SweptCurve {
-            curve: Curve::y_axis(),
+            curve: CurveKind::y_axis(),
             path: Vector::unit_z(),
         })
     }
@@ -40,7 +38,7 @@ impl Surface {
     pub fn plane_from_points(points: [impl Into<Point<3>>; 3]) -> Self {
         let [a, b, c] = points.map(Into::into);
 
-        let curve = Curve::Line(Line::from_points([a, b]));
+        let curve = CurveKind::Line(Line::from_points([a, b]));
         let path = c - a;
 
         Self::SweptCurve(SweptCurve { curve, path })
@@ -52,32 +50,6 @@ impl Surface {
         match self {
             Self::SweptCurve(surface) => Self::SweptCurve(surface.reverse()),
         }
-    }
-
-    /// Transform the surface
-    #[must_use]
-    pub fn transform(self, transform: &Transform) -> Self {
-        match self {
-            Self::SweptCurve(surface) => {
-                Self::SweptCurve(surface.transform(transform))
-            }
-        }
-    }
-
-    /// Convert a point in model coordinates to surface coordinates
-    pub fn point_to_surface_coords(
-        &self,
-        point_3d: impl Into<Point<3>>,
-    ) -> geometry::Point<2, 3> {
-        let point_3d = point_3d.into();
-
-        let point_2d = match self {
-            Self::SweptCurve(surface) => {
-                surface.point_to_surface_coords(point_3d)
-            }
-        };
-
-        geometry::Point::new(point_2d, point_3d)
     }
 
     /// Convert a point in surface coordinates to model coordinates
@@ -109,7 +81,7 @@ impl Surface {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct SweptCurve {
     /// The curve that this surface was swept from
-    pub curve: Curve<3>,
+    pub curve: CurveKind<3>,
 
     /// The path that the curve was swept along
     pub path: Vector<3>,
@@ -119,7 +91,7 @@ impl SweptCurve {
     /// Create a new instance that is reversed
     #[must_use]
     pub fn reverse(mut self) -> Self {
-        self.curve = self.curve.reverse();
+        self.path = -self.path;
         self
     }
 
@@ -129,19 +101,6 @@ impl SweptCurve {
         self.curve = self.curve.transform(transform);
         self.path = transform.transform_vector(&self.path);
         self
-    }
-
-    /// Convert a point in model coordinates to surface coordinates
-    pub fn point_to_surface_coords(
-        &self,
-        point: impl Into<Point<3>>,
-    ) -> Point<2> {
-        let point = point.into();
-
-        let u = self.curve.point_to_curve_coords(point).local().t;
-        let v = self.path_to_line().point_to_line_coords(point).t;
-
-        Point::from([u, v])
     }
 
     /// Convert a point in surface coordinates to model coordinates
@@ -165,52 +124,48 @@ impl SweptCurve {
     }
 
     fn path_to_line(&self) -> Line<3> {
-        Line {
-            origin: self.curve.origin(),
-            direction: self.path,
-        }
+        Line::from_origin_and_direction(self.curve.origin(), self.path)
     }
 }
 
 #[cfg(test)]
 mod tests {
-
     use fj_math::{Line, Point, Vector};
+    use pretty_assertions::assert_eq;
 
-    use crate::objects::Curve;
+    use crate::objects::CurveKind;
 
     use super::SweptCurve;
 
     #[test]
-    fn point_to_surface_coords() {
-        let plane = SweptCurve {
-            curve: Curve::Line(Line {
-                origin: Point::from([1., 0., 0.]),
-                direction: Vector::from([0., 2., 0.]),
-            }),
+    fn reverse() {
+        let original = SweptCurve {
+            curve: CurveKind::Line(Line::from_origin_and_direction(
+                Point::from([1., 0., 0.]),
+                Vector::from([0., 2., 0.]),
+            )),
             path: Vector::from([0., 0., 3.]),
         };
 
-        verify(&plane, Point::from([-1., -1.]));
-        verify(&plane, Point::from([0., 0.]));
-        verify(&plane, Point::from([1., 1.]));
-        verify(&plane, Point::from([2., 3.]));
+        let reversed = original.reverse();
 
-        fn verify(swept: &SweptCurve, surface_point: Point<2>) {
-            let point = swept.point_from_surface_coords(surface_point);
-            let result = swept.point_to_surface_coords(point);
-
-            assert_eq!(result, surface_point);
-        }
+        let expected = SweptCurve {
+            curve: CurveKind::Line(Line::from_origin_and_direction(
+                Point::from([1., 0., 0.]),
+                Vector::from([0., 2., 0.]),
+            )),
+            path: Vector::from([0., 0., -3.]),
+        };
+        assert_eq!(expected, reversed);
     }
 
     #[test]
     fn point_from_surface_coords() {
         let swept = SweptCurve {
-            curve: Curve::Line(Line {
-                origin: Point::from([1., 1., 1.]),
-                direction: Vector::from([0., 2., 0.]),
-            }),
+            curve: CurveKind::Line(Line::from_origin_and_direction(
+                Point::from([1., 1., 1.]),
+                Vector::from([0., 2., 0.]),
+            )),
             path: Vector::from([0., 0., 2.]),
         };
 
@@ -223,10 +178,10 @@ mod tests {
     #[test]
     fn vector_from_surface_coords() {
         let swept = SweptCurve {
-            curve: Curve::Line(Line {
-                origin: Point::from([1., 0., 0.]),
-                direction: Vector::from([0., 2., 0.]),
-            }),
+            curve: CurveKind::Line(Line::from_origin_and_direction(
+                Point::from([1., 0., 0.]),
+                Vector::from([0., 2., 0.]),
+            )),
             path: Vector::from([0., 0., 2.]),
         };
 
