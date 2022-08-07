@@ -16,12 +16,8 @@ mod application;
 mod args;
 mod config;
 // mod ecs_manager;
-mod code_editor;
-mod editor_window;
+mod editor;
 mod main_ui;
-mod project_manager;
-mod syntax_highlighting;
-mod window;
 
 use std::path::PathBuf;
 
@@ -33,9 +29,7 @@ use fj_operations::shape_processor::ShapeProcessor;
 use tracing_subscriber::fmt::format;
 use tracing_subscriber::EnvFilter;
 
-use crate::{
-    application::run_app, args::Args, config::Config, project_manager::Project,
-};
+use crate::{application::run_app, args::Args, config::Config};
 
 fn main() -> anyhow::Result<()> {
     let mut status = StatusReport::new();

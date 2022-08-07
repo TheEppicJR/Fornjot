@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use std::{io, mem::size_of};
 
-use crate::code_editor::CodeEditor;
+use crate::editor::code_editor::CodeEditor;
 use fj_math::{Aabb, Point};
 use thiserror::Error;
 use tracing::debug;

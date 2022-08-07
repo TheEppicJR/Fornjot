@@ -3,7 +3,7 @@ pub struct CodeEditor {
     code: String,
 }
 
-use crate::window::{EditWindow, View};
+use super::window::{EditWindow, View};
 
 impl Default for CodeEditor {
     fn default() -> Self {
@@ -68,7 +68,7 @@ impl View for CodeEditor {
         }
 
         let mut theme =
-            crate::syntax_highlighting::CodeTheme::from_memory(ui.ctx());
+            super::syntax_highlighting::CodeTheme::from_memory(ui.ctx());
         ui.collapsing("Theme", |ui| {
             ui.group(|ui| {
                 theme.ui(ui);
@@ -77,7 +77,7 @@ impl View for CodeEditor {
         });
 
         let mut layouter = |ui: &egui::Ui, string: &str, wrap_width: f32| {
-            let mut layout_job = crate::syntax_highlighting::highlight(
+            let mut layout_job = super::syntax_highlighting::highlight(
                 ui.ctx(),
                 &theme,
                 string,

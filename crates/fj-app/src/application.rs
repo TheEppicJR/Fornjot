@@ -1,6 +1,6 @@
-use crate::code_editor::CodeEditor;
+use crate::editor::code_editor::CodeEditor;
+use crate::editor::window::EditWindow;
 use crate::main_ui::{Fornjot, FornjotConfig};
-use crate::window::EditWindow;
 use eframe::{
     egui::containers::{CentralPanel, SidePanel, TopBottomPanel},
     egui::Vec2,
