@@ -15,9 +15,10 @@
 mod application;
 mod args;
 mod config;
-// mod ecs_manager;
+mod ecs;
 mod editor;
 mod main_ui;
+mod ui_tabs;
 
 use std::path::PathBuf;
 

@@ -1,7 +1,10 @@
 use bevy::prelude::*;
 
-enum view_tab {
-    Welcome(WelcomeTab),
-    Model(ModelTab),
-    Settings(SettingsTab),
+#[derive(Component)]
+pub struct EditorTab(String);
+
+impl EditorTab {
+    pub fn new(name: String) -> Self {
+        Self(name)
+    }
 }

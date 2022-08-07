@@ -3,7 +3,7 @@ pub struct CodeEditor {
     code: String,
 }
 
-use super::window::{EditWindow, View};
+use super::super::window::{EditWindow, View};
 
 impl Default for CodeEditor {
     fn default() -> Self {
@@ -41,31 +41,6 @@ impl View for CodeEditor {
             ui.set_height(0.0);
             ui.label("An example of syntax highlighting in a TextEdit.");
         });
-
-        if cfg!(feature = "syntect") {
-            ui.horizontal(|ui| {
-                ui.label("Language:");
-                ui.text_edit_singleline(language);
-            });
-            ui.horizontal_wrapped(|ui| {
-                ui.spacing_mut().item_spacing.x = 0.0;
-                ui.label("Syntax highlighting powered by ");
-                ui.hyperlink_to(
-                    "syntect",
-                    "https://github.com/trishume/syntect",
-                );
-                ui.label(".");
-            });
-        } else {
-            ui.horizontal_wrapped(|ui| {
-                ui.spacing_mut().item_spacing.x = 0.0;
-                ui.label("Compile the demo with the ");
-                ui.code("syntax_highlighting");
-                ui.label(" feature to enable more accurate syntax highlighting using ");
-                ui.hyperlink_to("syntect", "https://github.com/trishume/syntect");
-                ui.label(".");
-            });
-        }
 
         let mut theme =
             super::syntax_highlighting::CodeTheme::from_memory(ui.ctx());

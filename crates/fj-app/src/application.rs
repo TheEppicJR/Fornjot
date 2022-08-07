@@ -1,4 +1,4 @@
-use crate::editor::code_editor::CodeEditor;
+use crate::editor::code_editor::code_editor::CodeEditor;
 use crate::editor::window::EditWindow;
 use crate::main_ui::{Fornjot, FornjotConfig};
 use eframe::{
