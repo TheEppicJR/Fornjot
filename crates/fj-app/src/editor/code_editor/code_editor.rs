@@ -3,8 +3,6 @@ pub struct CodeEditor {
     code: String,
 }
 
-use super::super::window::{EditWindow, View};
-
 impl Default for CodeEditor {
     fn default() -> Self {
         Self {
@@ -19,21 +17,7 @@ fn main() {\n\
     }
 }
 
-impl EditWindow for CodeEditor {
-    fn name(&self) -> &'static str {
-        "🖮 Code Editor"
-    }
-
-    fn show(&mut self, ctx: &egui::Context, open: &mut bool) {
-        use View as _;
-        egui::Window::new(self.name())
-            .open(open)
-            .default_height(500.0)
-            .show(ctx, |ui| self.ui(ui));
-    }
-}
-
-impl View for CodeEditor {
+impl CodeEditor {
     fn ui(&mut self, ui: &mut egui::Ui) {
         let Self { language, code } = self;
 

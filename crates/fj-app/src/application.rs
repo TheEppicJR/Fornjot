@@ -1,5 +1,3 @@
-use crate::editor::code_editor::code_editor::CodeEditor;
-use crate::editor::window::EditWindow;
 use crate::main_ui::{Fornjot, FornjotConfig};
 use eframe::{
     egui::containers::{CentralPanel, SidePanel, TopBottomPanel},
@@ -10,11 +8,6 @@ use eframe::{
 impl App for Fornjot {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         SidePanel::left("demo_ui").show(ctx, |ui| {
-            ui.label("hi");
-            ui.add_space(16.0);
-            self.code_edit
-                .show(ctx, &mut ui.button("Open Code Editor").clicked());
-            ui.add_space(16.0);
             ui.group(|ui| {
                 // ui.checkbox(&mut config.draw_model, "Render model")
                 //     .on_hover_text_at_pointer("Toggle with 1");
