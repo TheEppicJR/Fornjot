@@ -107,9 +107,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.59"
+version = "1.0.60"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c91f1f46651137be86f3a2b9a8359f9ab421d04d941c62b5982e1ca21113adf9"
+checksum = "c794e162a5eff65c72ef524dfe393eb923c354e350bb78b9c7383df13f3bc142"
 
 [[package]]
 name = "anymap"
@@ -1798,7 +1798,7 @@ checksum = "0ce7134b9999ecaf8bcd65542e436736ef32ddca1b3e06094cb6ec5755203b80"
 
 [[package]]
 name = "fj"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "fj-proc",
  "serde",
@@ -1807,7 +1807,7 @@ dependencies = [
 
 [[package]]
 name = "fj-app"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "bevy",
@@ -1844,7 +1844,7 @@ dependencies = [
 
 [[package]]
 name = "fj-export"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "fj-interop",
  "fj-math",
@@ -1855,7 +1855,7 @@ dependencies = [
 
 [[package]]
 name = "fj-host"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "cargo_metadata",
  "fj",
@@ -1867,14 +1867,14 @@ dependencies = [
 
 [[package]]
 name = "fj-interop"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "fj-math",
 ]
 
 [[package]]
 name = "fj-kernel"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "anymap",
@@ -1892,7 +1892,7 @@ dependencies = [
 
 [[package]]
 name = "fj-math"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "approx 0.5.1",
  "decorum",
@@ -1904,7 +1904,7 @@ dependencies = [
 
 [[package]]
 name = "fj-operations"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "fj",
  "fj-interop",
@@ -1915,7 +1915,7 @@ dependencies = [
 
 [[package]]
 name = "fj-proc"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "fj",
  "proc-macro2",
@@ -1926,7 +1926,7 @@ dependencies = [
 
 [[package]]
 name = "fj-viewer"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "bytemuck",
  "egui",
@@ -1944,7 +1944,7 @@ dependencies = [
 
 [[package]]
 name = "fj-window"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "fj-host",
  "fj-interop",
@@ -3837,6 +3837,7 @@ version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26d50bfb8c23f23915855a00d98b5a35ef2e0b871bb52937bacadb798fbb66c8"
 dependencies = [
+ "once_cell",
  "once_cell",
  "thiserror",
  "toml",
