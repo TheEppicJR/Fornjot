@@ -147,7 +147,7 @@ impl State {
 fn gen_ui(
     ui: &mut Ui,
     tab_id: u32,
-    mut query: &mut Query<(&mut EditorUiWrapper, Entity), With<EditorTabId>>,
+    query: &mut Query<(&mut EditorUiWrapper, Entity), With<EditorTabId>>,
 ) {
     for (mut edit_wrapper, ent) in query.iter_mut() {
         if tab_id == ent.id() {
@@ -169,7 +169,7 @@ pub fn show(
     ui: &mut Ui,
     id: Id,
     tree: &mut Tree,
-    mut commands: &Commands,
+    commands: &Commands,
     mut query: Query<(&mut EditorUiWrapper, Entity), With<EditorTabId>>,
 ) {
     let style = Style::from_egui(ui.style());

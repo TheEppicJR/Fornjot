@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 
 use std::{io, mem::size_of};
 
-use crate::editor::code_editor::code_editor::CodeEditor;
 use fj_math::{Aabb, Point};
 use thiserror::Error;
 use tracing::debug;
@@ -64,7 +63,6 @@ pub struct Fornjot {
     pub api_key_initialized: bool,
     pub toggle_config: bool,
     pub toggle_about: bool,
-    pub code_edit: CodeEditor,
 
     // surface: wgpu::Surface,
     // device: wgpu::Device,

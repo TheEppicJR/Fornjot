@@ -1,4 +1,3 @@
-use super::super::ecs::tabs::EditorTab;
 use crate::editor::code_editor::syntax_highlighting::CodeTheme;
 use bevy::prelude::*;
 #[derive(Default)]

@@ -1,6 +1,3 @@
-use super::super::ecs::tabs::EditorTab;
-use bevy::prelude::*;
-
 #[derive(Default)]
 pub struct WelcomeUI;
 

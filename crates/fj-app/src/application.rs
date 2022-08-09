@@ -9,10 +9,6 @@ use bevy_egui::{egui, EguiContext, EguiPlugin, EguiSettings};
 
 #[derive(Default)]
 struct UiState {
-    label: String,
-    value: f32,
-    inverted: bool,
-    egui_texture_handle: Option<egui::TextureHandle>,
     is_window_open: bool,
 }
 
@@ -57,8 +53,8 @@ fn ui_renderer(
     mut egui_ctx: ResMut<EguiContext>,
     mut ui_state: ResMut<UiState>,
     mut tab_tree: ResMut<Tree>,
-    mut query: Query<(&mut EditorUiWrapper, Entity), With<EditorTabId>>,
-    mut commands: Commands,
+    query: Query<(&mut EditorUiWrapper, Entity), With<EditorTabId>>,
+    commands: Commands,
 ) {
     egui::TopBottomPanel::top("top_panel").show(egui_ctx.ctx_mut(), |ui| {
         // The top panel is often a good place for a menu bar:
@@ -85,7 +81,7 @@ fn ui_renderer(
             ui,
             egui::Id::new("some hashable string"),
             &mut *tab_tree,
-            &mut commands,
+            &commands,
             query,
         )
     });

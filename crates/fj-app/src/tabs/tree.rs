@@ -222,11 +222,11 @@ impl Tree {
         tab_gen_id: u32,
     ) {
         let mut tab = Tab {
-            title: title,
+            title,
             tabid: tab_id,
             tabgenid: tab_gen_id,
         };
-        let mut active_tab = self.find_active();
+        let active_tab = self.find_active();
         match active_tab {
             None => {
                 self.new_single(tab);
