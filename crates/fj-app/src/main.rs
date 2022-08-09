@@ -17,9 +17,7 @@ mod args;
 mod config;
 mod ecs;
 mod editor;
-mod sidebar;
-mod tabs;
-mod ui_tabs;
+mod settings_ui;
 
 use std::path::PathBuf;
 

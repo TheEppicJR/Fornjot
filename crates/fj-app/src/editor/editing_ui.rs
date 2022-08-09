@@ -12,10 +12,6 @@ pub struct EditingUI {
     name: String,
     // model: Model,
     // shape: Shape,
-    left: f32,
-    top: f32,
-    right: f32,
-    bottom: f32,
 }
 
 impl Default for EditingUI {
@@ -50,10 +46,6 @@ pub fn model(
             name: "New Project".into(),
             language: "rs".into(),
             // shape,
-            right: 0.0,
-            left: 0.0,
-            top: 0.0,
-            bottom: 0.0,
         }
     }
 }
@@ -77,71 +69,19 @@ impl EditingUI {
             ui.fonts().layout_job(layout_job)
         };
 
-        self.top = egui::TopBottomPanel::top("top_panel")
-            .resizable(true)
-            .min_height(32.0)
-            .show_inside(ui, |ui| {
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    ui.vertical_centered(|ui| {
-                        ui.heading("Expandable Upper Panel");
-                    });
-                });
-            })
-            .response
-            .rect
-            .height();
+        ui.heading("Expandable Upper Panel");
 
-        self.left = egui::SidePanel::left("left_panel")
-            .resizable(true)
-            .default_width(150.0)
-            .width_range(80.0..=200.0)
-            .show_inside(ui, |ui| {
-                ui.vertical_centered(|ui| {
-                    ui.heading("Left Panel");
-                });
-            })
-            .response
-            .rect
-            .width();
-
-        self.right = egui::SidePanel::right("right_panel")
-            .resizable(true)
-            .default_width(150.0)
-            .width_range(80.0..=200.0)
-            .show_inside(ui, |ui| {
-                ui.vertical_centered(|ui| {
-                    ui.heading("Right Panel");
-                });
-            })
-            .response
-            .rect
-            .width();
-
-        self.bottom = egui::TopBottomPanel::bottom("bottom_panel")
-            .resizable(true)
-            .min_height(0.0)
-            .show_inside(ui, |ui| {
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    ui.add(
-                        egui::TextEdit::multiline(&mut self.project_code)
-                            .font(egui::TextStyle::Monospace) // for cursor height
-                            .code_editor()
-                            .lock_focus(true)
-                            .desired_width(f32::INFINITY)
-                            .layouter(&mut layouter)
-                            .desired_rows(100),
-                    );
-                });
-            })
-            .response
-            .rect
-            .height();
-
-        // egui::CentralPanel::default().show_inside(ui, |ui| {
-        //     ui.vertical_centered(|ui| {
-        //         ui.heading("Central Panel");
-        //     });
-        // });
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            ui.add(
+                egui::TextEdit::multiline(&mut self.project_code)
+                    .font(egui::TextStyle::Monospace) // for cursor height
+                    .code_editor()
+                    .lock_focus(true)
+                    .desired_width(f32::INFINITY)
+                    .layouter(&mut layouter)
+                    .desired_rows(100),
+            );
+        });
     }
 
     // fn render_model(&mut self) {
