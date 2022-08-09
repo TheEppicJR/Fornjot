@@ -440,6 +440,7 @@ impl Renderer {
                 .map_err(DrawError::Text)?;
         }
 
+
         //
 
         //
@@ -470,6 +471,18 @@ impl Renderer {
 
         let egui_input = self.egui.winit_state.take_egui_input(window);
         self.egui.context.begin_frame(egui_input);
+
+        egui::Area::new("fj-status-message").show(&self.egui.context, |ui| {
+            ui.group(|ui| {
+                ui.add(egui::Label::new(
+                    egui::RichText::new(format!(
+                        "Status:\n{}",
+                        status.status()
+                    ))
+                    .color(egui::Color32::BLACK),
+                ))
+            })
+        });
 
         // End the UI frame. We could now handle the output and draw the UI with the backend.
         let egui_output = self.egui.context.end_frame();
