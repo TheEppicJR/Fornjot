@@ -17,7 +17,6 @@ mod args;
 mod config;
 mod ecs;
 mod editor;
-mod main_ui;
 mod tabs;
 mod ui_tabs;
 

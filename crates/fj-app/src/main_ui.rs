@@ -27,16 +27,6 @@ pub struct FornjotConfig {
     pub api_key: String,
 }
 
-#[derive(Default)]
-pub struct EguiOptionsState {
-    pub show_trace: bool,
-    pub show_layout_debug_on_hover: bool,
-    pub show_debug_text_example: bool,
-    pub show_original_ui: bool,
-    pub show_settings_ui: bool,
-    pub show_inspection_ui: bool,
-}
-
 impl Default for FornjotConfig {
     fn default() -> Self {
         Self {
