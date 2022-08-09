@@ -61,10 +61,6 @@ path = "../fj-host"
 version = "0.11.0"
 path = "../fj-interop"
 
-[dependencies.fj-interop]
-version = "0.11.0"
-path = "../fj-interop"
-
 [dependencies.fj-kernel]
 version = "0.11.0"
 path = "../fj-kernel"
