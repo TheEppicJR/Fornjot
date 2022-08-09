@@ -33,6 +33,7 @@ pub struct SettingsUI {
     pub show_settings_ui: bool,
     pub show_inspection_ui: bool,
     pub egui_context: egui::Context,
+    pub dummy_bool: bool,
 }
 
 #[derive(Component, Default)]
@@ -57,6 +58,9 @@ impl SettingsUI {
             let tmp_ui = ui.ctx().clone();
             tmp_ui.settings_ui(ui);
         });
+        ui.add_space(16.0);
+        ui.label("Other app settings");
+        ui.checkbox(&mut self.dummy_bool, "");
     }
 }
 

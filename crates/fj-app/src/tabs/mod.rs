@@ -77,8 +77,10 @@ pub use self::tree::{Node, NodeIndex, Split, Tab, Tree};
 
 use super::ui_tabs::tab_wrapper::EditorUiWrapper;
 use crate::ecs::tabs::EditorTabId;
+use crate::editor::render_settings::RenderSettings;
 use crate::ui_tabs::tab_wrapper::editor_ui_wrapper;
 use bevy::prelude::*;
+use bevy_egui::egui;
 use egui::style::Margin;
 use egui::*;
 
@@ -147,8 +149,10 @@ impl State {
 fn gen_ui(
     ui: &mut Ui,
     tab_id: u32,
+    ren_param: &RenderSettings,
     query: &mut Query<(&mut EditorUiWrapper, Entity), With<EditorTabId>>,
 ) {
+    // this is so ugly and I hate it
     for (mut edit_wrapper, ent) in query.iter_mut() {
         if tab_id == ent.id() {
             match &mut edit_wrapper.tab_ui {
@@ -169,6 +173,7 @@ pub fn show(
     ui: &mut Ui,
     id: Id,
     tree: &mut Tree,
+    ren_param: &RenderSettings,
     commands: &Commands,
     mut query: Query<(&mut EditorUiWrapper, Entity), With<EditorTabId>>,
 ) {
@@ -330,7 +335,7 @@ pub fn show(
 
                     let mut ui = ui.child_ui(rect, Default::default());
 
-                    gen_ui(&mut ui, tab.tabid, &mut query);
+                    gen_ui(&mut ui, tab.tabid, ren_param, &mut query);
                 }
 
                 let is_being_dragged = ui.memory().is_anything_being_dragged();
