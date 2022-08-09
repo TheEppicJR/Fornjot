@@ -1,7 +1,7 @@
 use super::super::ecs::tabs::EditorTab;
 use bevy::prelude::*;
 
-#[derive(Component, Default)]
+#[derive(Default)]
 pub struct DebugUI;
 
 #[derive(Component)]
@@ -17,11 +17,4 @@ impl DebugUI {
             ui.label("debug sys placeholder");
         });
     }
-}
-
-pub fn add_debug_tab(mut commands: Commands) {
-    commands
-        .spawn()
-        .insert(EditorTab::new("Debug".to_string()))
-        .insert(DebugUI::default());
 }

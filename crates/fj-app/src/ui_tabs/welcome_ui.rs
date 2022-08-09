@@ -1,7 +1,7 @@
 use super::super::ecs::tabs::EditorTab;
 use bevy::prelude::*;
 
-#[derive(Component, Default)]
+#[derive(Default)]
 pub struct WelcomeUI;
 
 impl WelcomeUI {
@@ -11,11 +11,4 @@ impl WelcomeUI {
             ui.label("Welcome to the prototype fj-app tab system.");
         });
     }
-}
-
-pub fn add_welcome_tab(mut commands: Commands) {
-    commands
-        .spawn()
-        .insert(EditorTab::new("Welcome".to_string()))
-        .insert(WelcomeUI::default());
 }

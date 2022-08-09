@@ -1,8 +1,7 @@
 use super::super::ecs::tabs::EditorTab;
 use crate::editor::code_editor::syntax_highlighting::CodeTheme;
 use bevy::prelude::*;
-
-#[derive(Component, Default)]
+#[derive(Default)]
 pub struct SettingsUI;
 
 #[derive(Component, Default)]
@@ -27,11 +26,4 @@ impl SettingsUI {
 
 pub fn init_app_settings(mut commands: Commands) {
     todo!();
-}
-
-pub fn add_settings_tab(mut commands: Commands) {
-    commands
-        .spawn()
-        .insert(EditorTab::new("Settings".to_string()))
-        .insert(SettingsUI::default());
 }

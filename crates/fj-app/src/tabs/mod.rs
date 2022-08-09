@@ -70,24 +70,27 @@
 //! egui_dock::show(&mut ui, id, style, tree, context);
 //! ```
 
-mod tab;
+pub mod tab_ecs_helper;
 mod tree;
 
-pub use self::tab::{Tab, TabDowncast};
-pub use self::tree::{Node, NodeIndex, Split, Tree};
+pub use self::tree::{Node, NodeIndex, Split, Tab, Tree};
 
+use super::ui_tabs::tab_wrapper::EditorUiWrapper;
+use crate::ecs::tabs::EditorTabId;
+use crate::ui_tabs::tab_wrapper::editor_ui_wrapper;
+use bevy::prelude::*;
 use egui::style::Margin;
 use egui::*;
 
 struct HoverData {
-    rect: Rect,
-    tabs: Option<Rect>,
+    rect: egui::Rect,
+    tabs: Option<egui::Rect>,
     dst: NodeIndex,
     pointer: Pos2,
 }
 
 impl HoverData {
-    fn resolve(&self) -> (Option<Split>, Rect) {
+    fn resolve(&self) -> (Option<Split>, egui::Rect) {
         if let Some(tabs) = self.tabs {
             return (None, tabs);
         }
@@ -111,11 +114,14 @@ impl HoverData {
             .unwrap();
 
         let (target, other) = match position {
-            0 => (None, Rect::EVERYTHING),
-            1 => (Some(Split::Left), Rect::everything_left_of(center.x)),
-            2 => (Some(Split::Right), Rect::everything_right_of(center.x)),
-            3 => (Some(Split::Above), Rect::everything_above(center.y)),
-            4 => (Some(Split::Below), Rect::everything_below(center.y)),
+            0 => (None, egui::Rect::EVERYTHING),
+            1 => (Some(Split::Left), egui::Rect::everything_left_of(center.x)),
+            2 => (
+                Some(Split::Right),
+                egui::Rect::everything_right_of(center.x),
+            ),
+            3 => (Some(Split::Above), egui::Rect::everything_above(center.y)),
+            4 => (Some(Split::Below), egui::Rect::everything_below(center.y)),
             _ => unreachable!(),
         };
 
@@ -138,14 +144,35 @@ impl State {
     }
 }
 
+fn gen_ui(
+    ui: &mut Ui,
+    tab_id: u32,
+    mut query: &mut Query<(&mut EditorUiWrapper, Entity), With<EditorTabId>>,
+) {
+    for (mut edit_wrapper, ent) in query.iter_mut() {
+        if tab_id == ent.id() {
+            match &mut edit_wrapper.tab_ui {
+                editor_ui_wrapper::None => {
+                    ui.heading("Tab UI missing");
+                }
+                editor_ui_wrapper::Editor(ui_hand) => ui_hand.ui(ui),
+                editor_ui_wrapper::Welcome(ui_hand) => ui_hand.ui(ui),
+                editor_ui_wrapper::Settings(ui_hand) => ui_hand.ui(ui),
+                editor_ui_wrapper::Debug(ui_hand) => ui_hand.ui(ui),
+            }
+        }
+    }
+}
+
 /// Shows the docking hierarchy inside a `Ui`.
-pub fn show<Ctx>(
+pub fn show(
     ui: &mut Ui,
     id: Id,
-    style: &Style,
-    tree: &mut Tree<Ctx>,
-    context: &mut Ctx,
+    tree: &mut Tree,
+    mut commands: &Commands,
+    mut query: Query<(&mut EditorUiWrapper, Entity), With<EditorTabId>>,
 ) {
+    let style = Style::from_egui(ui.style());
     let mut state = State::load(ui.ctx(), id);
 
     let mut rect = ui.max_rect();
@@ -208,7 +235,8 @@ pub fn show<Ctx>(
                 let height_topbar = 24.0;
 
                 let bottom_y = rect.min.y + height_topbar;
-                let tabbar = rect.intersect(Rect::everything_above(bottom_y));
+                let tabbar =
+                    rect.intersect(egui::Rect::everything_above(bottom_y));
 
                 let full_response = ui.allocate_rect(rect, Sense::hover());
                 let tabs_response = ui.allocate_rect(tabbar, Sense::hover());
@@ -236,7 +264,7 @@ pub fn show<Ctx>(
 
                             let is_active =
                                 *active == tab_index || is_being_dragged;
-                            let label = tab.title().to_string();
+                            let label = tab.title.to_string();
 
                             if is_being_dragged {
                                 let layer_id = LayerId::new(Order::Tooltip, id);
@@ -249,7 +277,9 @@ pub fn show<Ctx>(
                                 let sense = egui::Sense::click_and_drag();
                                 let response = ui
                                     .interact(response.rect, id, sense)
-                                    .on_hover_cursor(CursorIcon::Grabbing);
+                                    .on_hover_cursor(
+                                        egui::CursorIcon::Grabbing,
+                                    );
 
                                 if let Some(pointer_pos) =
                                     ui.ctx().pointer_interact_pos()
@@ -290,7 +320,8 @@ pub fn show<Ctx>(
                 // tab body
                 if let Some(tab) = tabs.get_mut(*active) {
                     let top_y = rect.min.y + height_topbar;
-                    let rect = rect.intersect(Rect::everything_below(top_y));
+                    let rect =
+                        rect.intersect(egui::Rect::everything_below(top_y));
                     let rect = expand_to_pixel(rect, pixels_per_point);
 
                     *viewport = rect;
@@ -298,7 +329,8 @@ pub fn show<Ctx>(
                     ui.painter().rect_filled(rect, 0.0, style.background);
 
                     let mut ui = ui.child_ui(rect, Default::default());
-                    tab.ui(&mut ui, context);
+
+                    gen_ui(&mut ui, tab.tabid, &mut query);
                 }
 
                 let is_being_dragged = ui.memory().is_anything_being_dragged();
@@ -360,7 +392,7 @@ pub fn show<Ctx>(
     state.store(ui.ctx(), id);
 }
 
-fn expand_to_pixel(mut rect: Rect, ppi: f32) -> egui::Rect {
+fn expand_to_pixel(mut rect: egui::Rect, ppi: f32) -> egui::Rect {
     rect.min = map_to_pixel_pos(rect.min, ppi, f32::floor);
     rect.max = map_to_pixel_pos(rect.max, ppi, f32::ceil);
     rect
@@ -452,8 +484,8 @@ impl Style {
         &self,
         ui: &mut Ui,
         fraction: &mut f32,
-        rect: Rect,
-    ) -> (Rect, Rect, Rect) {
+        rect: egui::Rect,
+    ) -> (egui::Rect, egui::Rect, egui::Rect) {
         let pixels_per_point = ui.ctx().pixels_per_point();
 
         let mut separator = rect;
@@ -464,7 +496,7 @@ impl Style {
 
         let response = ui
             .allocate_rect(separator, Sense::click_and_drag())
-            .on_hover_cursor(CursorIcon::ResizeHorizontal);
+            .on_hover_cursor(egui::CursorIcon::ResizeHorizontal);
 
         {
             let delta = response.drag_delta().x;
@@ -488,9 +520,9 @@ impl Style {
         );
 
         (
-            rect.intersect(Rect::everything_right_of(separator.max.x)),
+            rect.intersect(egui::Rect::everything_right_of(separator.max.x)),
             separator,
-            rect.intersect(Rect::everything_left_of(separator.min.x)),
+            rect.intersect(egui::Rect::everything_left_of(separator.min.x)),
         )
     }
 
@@ -498,8 +530,8 @@ impl Style {
         &self,
         ui: &mut Ui,
         fraction: &mut f32,
-        rect: Rect,
-    ) -> (Rect, Rect, Rect) {
+        rect: egui::Rect,
+    ) -> (egui::Rect, egui::Rect, egui::Rect) {
         let pixels_per_point = ui.ctx().pixels_per_point();
 
         let mut separator = rect;
@@ -510,7 +542,7 @@ impl Style {
 
         let response = ui
             .allocate_rect(separator, Sense::click_and_drag())
-            .on_hover_cursor(CursorIcon::ResizeVertical);
+            .on_hover_cursor(egui::CursorIcon::ResizeVertical);
 
         {
             let delta = response.drag_delta().y;
@@ -535,9 +567,9 @@ impl Style {
         );
 
         (
-            rect.intersect(Rect::everything_above(separator.min.y)),
+            rect.intersect(egui::Rect::everything_above(separator.min.y)),
             separator,
-            rect.intersect(Rect::everything_below(separator.max.y)),
+            rect.intersect(egui::Rect::everything_below(separator.max.y)),
         )
     }
 
@@ -556,7 +588,7 @@ impl Style {
 
         let (rect, response) =
             ui.allocate_at_least(desired_size, Sense::hover());
-        let response = response.on_hover_cursor(CursorIcon::PointingHand);
+        let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
 
         if active {
             let mut tab = rect;

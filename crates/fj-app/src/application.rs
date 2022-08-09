@@ -1,162 +1,102 @@
-use crate::main_ui::{Fornjot, FornjotConfig};
-use eframe::{
-    egui::containers::{CentralPanel, SidePanel, TopBottomPanel},
-    egui::Vec2,
-    run_native, App, CreationContext, NativeOptions,
-};
+use crate::ecs::tabs::EditorTabId;
+use crate::tabs::tab_ecs_helper;
+use crate::tabs::{show, Tree};
+use crate::ui_tabs::add_tab;
+use crate::ui_tabs::tab_wrapper::EditorUiWrapper;
+use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
+use bevy::{prelude::*, window::PresentMode, winit::WinitSettings};
+use bevy_egui::{egui, EguiContext, EguiPlugin, EguiSettings};
 
-impl App for Fornjot {
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        SidePanel::left("demo_ui").show(ctx, |ui| {
-            ui.group(|ui| {
-                // ui.checkbox(&mut config.draw_model, "Render model")
-                //     .on_hover_text_at_pointer("Toggle with 1");
-                // ui.checkbox(&mut config.draw_mesh, "Render mesh")
-                //     .on_hover_text_at_pointer("Toggle with 2");
-                // ui.checkbox(&mut config.draw_debug, "Render debug")
-                //     .on_hover_text_at_pointer("Toggle with 3");
-                ui.checkbox(
-                    &mut self.egui_options.show_original_ui,
-                    "Render original UI",
-                );
-                ui.add_space(16.0);
-                // ui.strong(get_bbox_size_text(&self.geometries.aabb));
-            });
-
-            ui.add_space(16.0);
-
-            {
-                ui.group(|ui| {
-                    ui.checkbox(
-                        &mut self.egui_options.show_settings_ui,
-                        "Show egui settings UI",
-                    );
-                    if self.egui_options.show_settings_ui {
-                        self.egui_context.settings_ui(ui);
-                    }
-                });
-
-                ui.add_space(16.0);
-
-                ui.group(|ui| {
-                    ui.checkbox(
-                        &mut self.egui_options.show_inspection_ui,
-                        "Show egui inspection UI",
-                    );
-                    if self.egui_options.show_inspection_ui {
-                        ui.indent("indent-inspection-ui", |ui| {
-                            self.egui_context.inspection_ui(ui);
-                        });
-                    }
-                });
-            }
-
-            ui.add_space(16.0);
-
-            {
-                //
-                // Originally this was only meant to be a simple demonstration
-                // of the `egui` `trace!()` macro...
-                //
-                // ...but it seems the trace feature can't be enabled
-                // separately from the layout debug feature, which all
-                // gets a bit messy...
-                //
-                // ...so, this instead shows one possible way to implement
-                // "trace only" style debug text on hover.
-                //
-                ui.group(|ui| {
-                    let label_text = format!(
-                        "Show debug text demo.{}",
-                        if self.egui_options.show_debug_text_example {
-                            " (Hover me.)"
-                        } else {
-                            ""
-                        }
-                    );
-
-                    ui.style_mut().wrap = Some(false);
-
-                    if ui
-                        .checkbox(
-                            &mut self.egui_options.show_debug_text_example,
-                            label_text,
-                        )
-                        .hovered()
-                    {
-                        if self.egui_options.show_debug_text_example {
-                            let hover_pos = ui
-                                .input()
-                                .pointer
-                                .hover_pos()
-                                .unwrap_or_default();
-                            ui.painter().debug_text(
-                                hover_pos,
-                                egui::Align2::LEFT_TOP,
-                                egui::Color32::DEBUG_COLOR,
-                                format!("{:#?}", &self.config),
-                            );
-                        }
-                    }
-                });
-            }
-
-            ui.add_space(16.0);
-
-            {
-                //
-                // Demonstration of the `egui` layout debug functionality.
-                //
-                ui.group(|ui| {
-                    //
-
-                    if ui
-                        .checkbox(
-                            &mut self.egui_options.show_layout_debug_on_hover,
-                            "Show layout debug on hover.",
-                        )
-                        .changed()
-                    {
-                        ui.ctx().set_debug_on_hover(
-                            self.egui_options.show_layout_debug_on_hover,
-                        );
-                    }
-
-                    ui.scope(|ui| {
-                        if self.egui_options.show_trace {
-                            egui::trace!(ui, format!("{:?}", &self.config));
-                        }
-                    });
-
-                    ui.indent("indent-show-trace", |ui| {
-                        ui.set_enabled(
-                            self.egui_options.show_layout_debug_on_hover,
-                        );
-
-                        ui.checkbox(
-                            &mut self.egui_options.show_trace,
-                            "Also show egui trace.",
-                        );
-
-                        //
-                    });
-                });
-            }
-
-            ui.add_space(16.0);
-        });
-        // self.render_side_panel(ctx, frame);
-        self.render_model_panel(ctx, frame);
-    }
+#[derive(Default)]
+struct UiState {
+    label: String,
+    value: f32,
+    inverted: bool,
+    egui_texture_handle: Option<egui::TextureHandle>,
+    is_window_open: bool,
 }
 
-pub fn run_app() {
-    // let app = Fornjot::default();
-    let mut win_option = NativeOptions::default();
-    // win_option.initial_window_size = Some(Vec2::new(540., 960.));
-    run_native(
-        "Fornjott",
-        win_option,
-        Box::new(|cc| Box::new(Fornjot::new(cc))),
-    );
+pub fn start_app() {
+    App::new()
+        .insert_resource(ClearColor(Color::rgb(0.0, 0.0, 0.0)))
+        .insert_resource(Msaa { samples: 4 })
+        .insert_resource(WinitSettings::desktop_app())
+        .insert_resource(WindowDescriptor {
+            present_mode: PresentMode::Mailbox,
+            ..Default::default()
+        })
+        .init_resource::<UiState>()
+        .init_resource::<Tree>()
+        .add_plugins(DefaultPlugins)
+        .add_plugin(EguiPlugin)
+        .add_plugin(LogDiagnosticsPlugin::default())
+        .add_plugin(FrameTimeDiagnosticsPlugin::default())
+        .add_startup_system(configure_visuals)
+        .add_startup_system(add_tab::add_debug_tab)
+        .add_startup_system(add_tab::add_welcome_tab)
+        .add_startup_system(add_tab::add_settings_tab)
+        .add_startup_system(add_tab::add_editing_tab)
+        .add_startup_system(configure_ui_state)
+        .add_system(ui_renderer)
+        .add_system(tab_ecs_helper::check_for_new_tabs)
+        .run();
+}
+
+fn configure_visuals(mut egui_ctx: ResMut<EguiContext>) {
+    egui_ctx.ctx_mut().set_visuals(egui::Visuals {
+        window_rounding: 0.0.into(),
+        ..Default::default()
+    });
+}
+
+fn configure_ui_state(mut ui_state: ResMut<UiState>) {
+    ui_state.is_window_open = true;
+}
+
+fn ui_renderer(
+    mut egui_ctx: ResMut<EguiContext>,
+    mut ui_state: ResMut<UiState>,
+    mut tab_tree: ResMut<Tree>,
+    mut query: Query<(&mut EditorUiWrapper, Entity), With<EditorTabId>>,
+    mut commands: Commands,
+) {
+    egui::TopBottomPanel::top("top_panel").show(egui_ctx.ctx_mut(), |ui| {
+        // The top panel is often a good place for a menu bar:
+        egui::menu::bar(ui, |ui| {
+            egui::menu::menu_button(ui, "File", |ui| {
+                if ui.button("Quit").clicked() {
+                    std::process::exit(0);
+                }
+                if ui.button("Open").clicked() {
+                    std::process::exit(0);
+                }
+            });
+        });
+    });
+
+    egui::SidePanel::left("side_panel")
+        .default_width(200.0)
+        .show(egui_ctx.ctx_mut(), |ui| {
+            // show(ui, id, style, tree, context);
+        });
+
+    egui::CentralPanel::default().show(egui_ctx.ctx_mut(), |ui| {
+        show(
+            ui,
+            egui::Id::new("some hashable string"),
+            &mut *tab_tree,
+            &mut commands,
+            query,
+        )
+    });
+
+    egui::Window::new("Window")
+        .vscroll(true)
+        .open(&mut ui_state.is_window_open)
+        .show(egui_ctx.ctx_mut(), |ui| {
+            ui.label("Windows can be moved by dragging them.");
+            ui.label("They are automatically sized based on contents.");
+            ui.label("You can turn on resizing and scrolling if you like.");
+            ui.label("You would normally chose either panels OR windows.");
+        });
 }

@@ -18,6 +18,7 @@ mod config;
 mod ecs;
 mod editor;
 mod main_ui;
+mod tabs;
 mod ui_tabs;
 
 use std::path::PathBuf;
@@ -27,25 +28,27 @@ use anyhow::{anyhow, Context as _};
 use fj_host::{Model, Parameters};
 use fj_interop::status_report::StatusReport;
 use fj_operations::shape_processor::ShapeProcessor;
+use std::env;
 use tracing_subscriber::fmt::format;
 use tracing_subscriber::EnvFilter;
 
-use crate::{application::run_app, args::Args, config::Config};
+use crate::{application::start_app, args::Args, config::Config};
 
 fn main() -> anyhow::Result<()> {
+    env::set_var("RUST_BACKTRACE", "1");
     let mut status = StatusReport::new();
     // Respect `RUST_LOG`. If that's not defined or erroneous, log warnings and
     // above.
     //
     // It would be better to fail, if `RUST_LOG` is erroneous, but I don't know
     // how to distinguish between that and the "not defined" case.
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("WARN")),
-        )
-        .event_format(format().pretty())
-        .init();
+    // tracing_subscriber::fmt()
+    //     .with_env_filter(
+    //         EnvFilter::try_from_default_env()
+    //             .unwrap_or_else(|_| EnvFilter::new("WARN")),
+    //     )
+    //     .event_format(format().pretty())
+    //     .init();
 
     let args = Args::parse();
     let config = Config::load()?;
@@ -79,7 +82,7 @@ fn main() -> anyhow::Result<()> {
 
     // let watcher = model.load_and_watch(parameters)?;
     // run(watcher, shape_processor)?;
-    run_app();
+    start_app();
 
     Ok(())
 }
