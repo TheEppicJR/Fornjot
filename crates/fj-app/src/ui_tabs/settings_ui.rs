@@ -42,7 +42,7 @@ impl SettingsUI {
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.set_height(0.0);
-            ui.label("Settings placeholder");
+            ui.label("Application Settings");
         });
         ui.add_space(16.0);
         let mut theme = CodeTheme::from_memory(ui.ctx());
