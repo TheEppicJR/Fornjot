@@ -54,7 +54,12 @@ fn configure_visuals(mut egui_ctx: ResMut<EguiContext>) {
     });
 }
 
-fn configure_ui_state(mut ui_state: ResMut<UiState>, mut commands: Commands) {
+fn configure_ui_state(
+    mut ui_state: ResMut<UiState>,
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
     ui_state.is_window_open = true;
     let camera_pos = Vec3::new(-2.0, 2.5, 5.0);
     let camera_transform = Transform::from_translation(camera_pos)
@@ -62,6 +67,29 @@ fn configure_ui_state(mut ui_state: ResMut<UiState>, mut commands: Commands) {
     commands.spawn_bundle(PerspectiveCameraBundle {
         transform: camera_transform,
         ..Default::default()
+    });
+    // plane
+    commands.spawn_bundle(PbrBundle {
+        mesh: meshes.add(Mesh::from(shape::Plane { size: 5.0 })),
+        material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
+        ..default()
+    });
+    // cube
+    commands.spawn_bundle(PbrBundle {
+        mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
+        material: materials.add(Color::rgb(0.8, 0.7, 0.6).into()),
+        transform: Transform::from_xyz(0.0, 0.5, 0.0),
+        ..default()
+    });
+    // light
+    commands.spawn_bundle(PointLightBundle {
+        point_light: PointLight {
+            intensity: 1500.0,
+            shadows_enabled: true,
+            ..default()
+        },
+        transform: Transform::from_xyz(4.0, 8.0, 4.0),
+        ..default()
     });
 }
 

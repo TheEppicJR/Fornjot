@@ -137,11 +137,11 @@ impl EditingUI {
             .rect
             .height();
 
-        egui::CentralPanel::default().show_inside(ui, |ui| {
-            ui.vertical_centered(|ui| {
-                ui.heading("Central Panel");
-            });
-        });
+        // egui::CentralPanel::default().show_inside(ui, |ui| {
+        //     ui.vertical_centered(|ui| {
+        //         ui.heading("Central Panel");
+        //     });
+        // });
     }
 
     // fn render_model(&mut self) {
