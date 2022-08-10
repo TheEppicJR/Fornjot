@@ -4,16 +4,18 @@
 //! on their respective purpose.
 
 mod approx;
+mod contains;
 mod reverse;
 mod sweep;
 mod transform;
 mod triangulate;
 
+pub mod cast_ray;
 pub mod intersection;
-pub mod ray_cast;
 
 pub use self::{
     approx::{CycleApprox, FaceApprox, InvalidTolerance, Tolerance},
+    contains::Contains,
     reverse::reverse_face,
     sweep::sweep,
     transform::{transform_faces, TransformObject},

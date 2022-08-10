@@ -2,7 +2,7 @@ use fj_interop::debug::{DebugInfo, TriangleEdgeCheck};
 use fj_math::{Point, PolyChain, Segment};
 
 use crate::{
-    algorithms::ray_cast::{HorizontalRayToTheRight, RaySegmentHit},
+    algorithms::cast_ray::{CastRay, HorizontalRayToTheRight, RaySegmentHit},
     objects::Surface,
 };
 
@@ -131,6 +131,13 @@ impl Polygon {
         contains
     }
 
+    /// Check whether the polygon contains a point
+    ///
+    /// # Implementation Note
+    ///
+    /// This code is being duplicated by the `Contains<Point<2>>` implementation
+    /// for `Face`. It would be nice to be able to consolidate the duplication,
+    /// but this has turned out to be difficult.
     pub fn contains_point(
         &self,
         point: impl Into<Point<2>>,
@@ -154,13 +161,11 @@ impl Polygon {
             // first segment. The logic in the loop properly takes care of that,
             // as long as we initialize the `previous_hit` variable with the
             // result of the last segment.
-            let mut previous_hit = edges
-                .last()
-                .copied()
-                .and_then(|edge| ray.hits_segment(edge));
+            let mut previous_hit =
+                edges.last().copied().and_then(|edge| edge.cast_ray(ray));
 
             for edge in edges {
-                let hit = ray.hits_segment(edge);
+                let hit = edge.cast_ray(ray);
 
                 let count_hit = match (hit, previous_hit) {
                     (Some(RaySegmentHit::Segment), _) => {
