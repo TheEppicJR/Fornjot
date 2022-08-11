@@ -1,5 +1,4 @@
 use bevy::prelude::*;
-use egui_extras::{Size, StripBuilder};
 use fj::Shape;
 use fj_host::{Model, Parameters};
 use fj_interop::status_report::StatusReport;
@@ -10,8 +9,6 @@ pub struct EditingUI {
     project_code: String,
     project_path: PathBuf,
     name: String,
-    // model: Model,
-    // shape: Shape,
 }
 
 impl Default for EditingUI {
@@ -34,18 +31,12 @@ pub fn model(
 }"
         .into();
         let path = PathBuf::new();
-        // let mut model = Model::from_path(path).with_context(|| {
-        //     format!("Failed to load model: {}", path.display())
-        // })?;
-        let mut status = StatusReport::new();
-        // let mut shape = model.load_once(Parameters::empty, &mut status);
+
         Self {
             project_code: code,
             project_path: path,
-            // model,
             name: "New Project".into(),
             language: "rs".into(),
-            // shape,
         }
     }
 }

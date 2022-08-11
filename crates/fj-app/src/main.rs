@@ -15,7 +15,6 @@
 mod application;
 mod args;
 mod config;
-mod ecs;
 mod editor;
 mod settings_ui;
 

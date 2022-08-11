@@ -36,8 +36,122 @@ impl Default for PanOrbitCamera {
 
 const CAMERA_TARGET: Vec3 = Vec3::ZERO;
 
+struct OriginalCameraTransform(Transform);
+
+pub fn start_app() {
+    App::new()
+        .insert_resource(ClearColor(Color::rgb(0.0, 0.0, 0.0)))
+        .insert_resource(Msaa { samples: 4 })
+        .insert_resource(WinitSettings::desktop_app())
+        .insert_resource(WindowDescriptor {
+            present_mode: PresentMode::Mailbox,
+            ..Default::default()
+        })
+        .init_resource::<UiState>()
+        .init_resource::<RenderSettings>()
+        .init_resource::<editing_ui::EditingUI>()
+        .add_plugins(DefaultPlugins)
+        .add_plugin(EguiPlugin)
+        .add_system(pan_orbit_camera)
+        .add_plugin(LogDiagnosticsPlugin::default())
+        .add_plugin(FrameTimeDiagnosticsPlugin::default())
+        .add_startup_system(configure_ui_state)
+        .add_system(ui_renderer.after(pan_orbit_camera))
+        .run();
+}
+
+fn configure_ui_state(
+    mut ui_state: ResMut<UiState>,
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    ui_state.is_window_open = true;
+
+    let camera_pos = Vec3::new(-2.0, 2.5, 5.0);
+    let radius = camera_pos.length();
+    let camera_transform = Transform::from_translation(camera_pos)
+        .looking_at(CAMERA_TARGET, Vec3::Y);
+    commands.insert_resource(OriginalCameraTransform(camera_transform));
+    let mut spawn_bund = OrthographicCameraBundle::new_3d();
+    spawn_bund.transform = camera_transform;
+    commands.spawn_bundle(spawn_bund).insert(PanOrbitCamera {
+        radius,
+        ..Default::default()
+    });
+    // plane
+    commands.spawn_bundle(PbrBundle {
+        mesh: meshes.add(Mesh::from(shape::Plane { size: 5.0 })),
+        material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
+        ..default()
+    });
+    // cube
+    commands.spawn_bundle(PbrBundle {
+        mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
+        material: materials.add(Color::rgb(0.8, 0.7, 0.6).into()),
+        transform: Transform::from_xyz(0.0, 0.5, 0.0),
+        ..default()
+    });
+    // light
+    commands.spawn_bundle(PointLightBundle {
+        point_light: PointLight {
+            intensity: 1500.0,
+            shadows_enabled: true,
+            ..default()
+        },
+        transform: Transform::from_xyz(4.0, 8.0, 4.0),
+        ..default()
+    });
+}
+
+fn ui_renderer(
+    mut egui_ctx: ResMut<EguiContext>,
+    mut ui_state: ResMut<UiState>,
+    mut ren_param: ResMut<RenderSettings>,
+    mut edit_ui: ResMut<editing_ui::EditingUI>,
+    commands: Commands,
+) {
+    egui::Window::new("Window")
+        .vscroll(true)
+        .open(&mut ui_state.is_window_open)
+        .show(egui_ctx.ctx_mut(), |ui| {
+            settings_ui::ui(ui);
+        });
+
+    ui_state.left = egui::SidePanel::left("left_panel")
+        .resizable(true)
+        .show(egui_ctx.ctx_mut(), |ui| {
+            ui.label("Drag-and-drop files onto the window!");
+        })
+        .response
+        .rect
+        .width();
+    ui_state.top = egui::TopBottomPanel::top("top_panel")
+        .resizable(true)
+        .show(egui_ctx.ctx_mut(), |ui| {
+            // The top panel is often a good place for a menu bar:
+            ui.label("Drag-and-drop files onto the window!");
+        })
+        .response
+        .rect
+        .height();
+
+    ui_state.bottom = egui::TopBottomPanel::bottom("bottom_panel")
+        .resizable(true)
+        .show(egui_ctx.ctx_mut(), |ui| {
+            // The top panel is often a good place for a menu bar:
+
+            edit_ui.ui(ui);
+        })
+        .response
+        .rect
+        .height();
+}
+
 /// Pan the camera with middle mouse click, zoom with scroll wheel, orbit with right mouse click.
 fn pan_orbit_camera(
+    original_camera_transform: Res<OriginalCameraTransform>,
+    mut ui_state: ResMut<UiState>,
     windows: Res<Windows>,
     mut ev_motion: EventReader<MouseMotion>,
     mut ev_scroll: EventReader<MouseWheel>,
@@ -48,9 +162,10 @@ fn pan_orbit_camera(
         &OrthographicProjection,
     )>,
 ) {
+    let window = windows.get_primary().unwrap();
     // change input mapping for orbit and panning here
-    let orbit_button = MouseButton::Right;
-    let pan_button = MouseButton::Middle;
+    let orbit_button = MouseButton::Middle;
+    let pan_button = MouseButton::Right;
 
     let mut pan = Vec2::ZERO;
     let mut rotation_move = Vec2::ZERO;
@@ -101,7 +216,7 @@ fn pan_orbit_camera(
             let yaw = Quat::from_rotation_y(-delta_x);
             let pitch = Quat::from_rotation_x(-delta_y);
             transform.rotation = yaw * transform.rotation; // rotate around global y axis
-            transform.rotation = transform.rotation * pitch; // rotate around local x axis
+            transform.rotation *= pitch; // rotate around local x axis
         } else if pan.length_squared() > 0.0 {
             any = true;
             // make panning distance independent of resolution and FOV,
@@ -133,145 +248,6 @@ fn pan_orbit_camera(
 
 fn get_primary_window_size(windows: &Res<Windows>) -> Vec2 {
     let window = windows.get_primary().unwrap();
-    let window = Vec2::new(window.width() as f32, window.height() as f32);
-    window
-}
 
-struct OriginalCameraTransform(Transform);
-
-pub fn start_app() {
-    App::new()
-        .insert_resource(ClearColor(Color::rgb(0.0, 0.0, 0.0)))
-        .insert_resource(Msaa { samples: 4 })
-        .insert_resource(WinitSettings::desktop_app())
-        .insert_resource(WindowDescriptor {
-            present_mode: PresentMode::Mailbox,
-            ..Default::default()
-        })
-        .init_resource::<UiState>()
-        .init_resource::<RenderSettings>()
-        .init_resource::<editing_ui::EditingUI>()
-        .add_plugins(DefaultPlugins)
-        .add_plugin(EguiPlugin)
-        .add_system(pan_orbit_camera)
-        .add_plugin(LogDiagnosticsPlugin::default())
-        .add_plugin(FrameTimeDiagnosticsPlugin::default())
-        .add_startup_system(configure_ui_state)
-        .add_system(ui_renderer)
-        .add_system(update_camera_transform_system)
-        .run();
-}
-
-fn configure_ui_state(
-    mut ui_state: ResMut<UiState>,
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-) {
-    ui_state.is_window_open = true;
-
-    let camera_pos = Vec3::new(-2.0, 2.5, 5.0);
-    let radius = camera_pos.length();
-    let camera_transform = Transform::from_translation(camera_pos)
-        .looking_at(CAMERA_TARGET, Vec3::Y);
-    commands.insert_resource(OriginalCameraTransform(camera_transform));
-    commands
-        .spawn_bundle(OrthographicCameraBundle::new_3d())
-        .insert(PanOrbitCamera {
-            radius,
-            ..Default::default()
-        });
-    // plane
-    commands.spawn_bundle(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Plane { size: 5.0 })),
-        material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
-        ..default()
-    });
-    // cube
-    commands.spawn_bundle(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
-        material: materials.add(Color::rgb(0.8, 0.7, 0.6).into()),
-        transform: Transform::from_xyz(0.0, 0.5, 0.0),
-        ..default()
-    });
-    // light
-    commands.spawn_bundle(PointLightBundle {
-        point_light: PointLight {
-            intensity: 1500.0,
-            shadows_enabled: true,
-            ..default()
-        },
-        transform: Transform::from_xyz(4.0, 8.0, 4.0),
-        ..default()
-    });
-}
-
-fn ui_renderer(
-    mut egui_ctx: ResMut<EguiContext>,
-    mut ui_state: ResMut<UiState>,
-    mut ren_param: ResMut<RenderSettings>,
-    mut edit_ui: ResMut<editing_ui::EditingUI>,
-    commands: Commands,
-) {
-    ui_state.left = egui::SidePanel::left("left_panel")
-        .resizable(true)
-        .show(egui_ctx.ctx_mut(), |ui| {
-            ui.label("Drag-and-drop files onto the window!");
-        })
-        .response
-        .rect
-        .width();
-    ui_state.top = egui::TopBottomPanel::top("top_panel")
-        .show(egui_ctx.ctx_mut(), |ui| {
-            // The top panel is often a good place for a menu bar:
-            ui.label("Drag-and-drop files onto the window!");
-        })
-        .response
-        .rect
-        .height();
-
-    ui_state.bottom = egui::TopBottomPanel::bottom("bottom_panel")
-        .show(egui_ctx.ctx_mut(), |ui| {
-            // The top panel is often a good place for a menu bar:
-
-            edit_ui.ui(ui);
-        })
-        .response
-        .rect
-        .height();
-
-    egui::Window::new("Window")
-        .vscroll(true)
-        .open(&mut ui_state.is_window_open)
-        .show(egui_ctx.ctx_mut(), |ui| {
-            settings_ui::ui(ui);
-        });
-}
-
-fn update_camera_transform_system(
-    mut ui_state: ResMut<UiState>,
-    original_camera_transform: Res<OriginalCameraTransform>,
-    windows: Res<Windows>,
-    mut camera_query: Query<(&OrthographicProjection, &mut Transform)>,
-) {
-    let (camera_projection, mut transform) =
-        camera_query.get_single_mut().unwrap();
-
-    let distance_to_target =
-        (CAMERA_TARGET - original_camera_transform.0.translation).length();
-    let frustum_height = 2.0 * distance_to_target; // * (camera_projection.fov * 0.5).tan();
-    let frustum_width = frustum_height;
-
-    let window = windows.get_primary().unwrap();
-
-    let left_taken = ui_state.left / window.width();
-    let right_taken = ui_state.right / window.width();
-    let top_taken = ui_state.top / window.height();
-    let bottom_taken = ui_state.bottom / window.height();
-    transform.translation = original_camera_transform.0.translation
-        + transform.rotation.mul_vec3(Vec3::new(
-            (right_taken - left_taken) * frustum_width * 0.5,
-            (top_taken - bottom_taken) * frustum_height * 0.5,
-            0.0,
-        ));
+    Vec2::new(window.width() as f32, window.height() as f32)
 }
