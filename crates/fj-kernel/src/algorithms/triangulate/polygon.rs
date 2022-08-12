@@ -2,7 +2,9 @@ use fj_interop::debug::{DebugInfo, TriangleEdgeCheck};
 use fj_math::{Point, PolyChain, Segment};
 
 use crate::{
-    algorithms::cast_ray::{CastRay, HorizontalRayToTheRight, RaySegmentHit},
+    algorithms::intersect::{
+        ray_segment::RaySegmentIntersection, HorizontalRayToTheRight, Intersect,
+    },
     objects::Surface,
 };
 
@@ -161,24 +163,40 @@ impl Polygon {
             // first segment. The logic in the loop properly takes care of that,
             // as long as we initialize the `previous_hit` variable with the
             // result of the last segment.
-            let mut previous_hit =
-                edges.last().copied().and_then(|edge| edge.cast_ray(ray));
+            let mut previous_hit = edges
+                .last()
+                .copied()
+                .and_then(|edge| (&ray, &edge).intersect());
 
             for edge in edges {
-                let hit = edge.cast_ray(ray);
+                let hit = (&ray, &edge).intersect();
 
                 let count_hit = match (hit, previous_hit) {
-                    (Some(RaySegmentHit::Segment), _) => {
+                    (
+                        Some(
+                            RaySegmentIntersection::RayStartsOnSegment
+                            | RaySegmentIntersection::RayStartsOnOnFirstVertex
+                            | RaySegmentIntersection::RayStartsOnSecondVertex,
+                        ),
+                        _,
+                    ) => {
+                        // If the ray starts on the boundary of the polygon,
+                        // there's nothing else to check. By the definition of
+                        // this intersection test, the polygon contains the
+                        // point.
+                        return true;
+                    }
+                    (Some(RaySegmentIntersection::RayHitsSegment), _) => {
                         // We're hitting a segment right-on. Clear case.
                         true
                     }
                     (
-                        Some(RaySegmentHit::UpperVertex),
-                        Some(RaySegmentHit::LowerVertex),
+                        Some(RaySegmentIntersection::RayHitsUpperVertex),
+                        Some(RaySegmentIntersection::RayHitsLowerVertex),
                     )
                     | (
-                        Some(RaySegmentHit::LowerVertex),
-                        Some(RaySegmentHit::UpperVertex),
+                        Some(RaySegmentIntersection::RayHitsLowerVertex),
+                        Some(RaySegmentIntersection::RayHitsUpperVertex),
                     ) => {
                         // If we're hitting a vertex, only count it if we've hit
                         // the other kind of vertex right before.
@@ -195,7 +213,7 @@ impl Polygon {
                         // passing through anything.
                         true
                     }
-                    (Some(RaySegmentHit::Parallel), _) => {
+                    (Some(RaySegmentIntersection::RayHitsSegmentAndAreParallel), _) => {
                         // A parallel edge must be completely ignored. Its
                         // presence won't change anything, so we can treat it as
                         // if it wasn't there, and its neighbors were connected
