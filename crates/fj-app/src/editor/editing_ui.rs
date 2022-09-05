@@ -4,6 +4,7 @@ use fj_host::{Model, Parameters};
 use fj_interop::status_report::StatusReport;
 use std::path::PathBuf;
 
+#[derive(Resource)]
 pub struct EditingUI {
     language: String,
     project_code: String,

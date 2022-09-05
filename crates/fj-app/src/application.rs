@@ -3,11 +3,13 @@ use crate::editor::render_settings::RenderSettings;
 use crate::settings_ui;
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use bevy::input::mouse::{MouseMotion, MouseWheel};
-use bevy::ui;
-use bevy::{prelude::*, window::PresentMode, winit::WinitSettings};
+use bevy::{
+    prelude::*, render::camera::ScalingMode, window::PresentMode,
+    winit::WinitSettings,
+};
 use bevy_egui::{egui, EguiContext, EguiPlugin};
 
-#[derive(Default)]
+#[derive(Resource, Default)]
 struct UiState {
     is_window_open: bool,
     left: f32,
@@ -36,6 +38,7 @@ impl Default for PanOrbitCamera {
 
 const CAMERA_TARGET: Vec3 = Vec3::ZERO;
 
+#[derive(Resource)]
 struct OriginalCameraTransform(Transform);
 
 pub fn start_app() {
@@ -56,7 +59,7 @@ pub fn start_app() {
         .add_plugin(LogDiagnosticsPlugin::default())
         .add_plugin(FrameTimeDiagnosticsPlugin::default())
         .add_startup_system(configure_ui_state)
-        .add_system(ui_renderer.after(pan_orbit_camera))
+        .add_system(ui_renderer)
         .run();
 }
 
@@ -73,12 +76,21 @@ fn configure_ui_state(
     let camera_transform = Transform::from_translation(camera_pos)
         .looking_at(CAMERA_TARGET, Vec3::Y);
     commands.insert_resource(OriginalCameraTransform(camera_transform));
-    let mut spawn_bund = OrthographicCameraBundle::new_3d();
-    spawn_bund.transform = camera_transform;
-    commands.spawn_bundle(spawn_bund).insert(PanOrbitCamera {
-        radius,
-        ..Default::default()
-    });
+    commands
+        .spawn_bundle(Camera3dBundle {
+            projection: OrthographicProjection {
+                scale: 3.0,
+                scaling_mode: ScalingMode::FixedVertical(2.0),
+                ..default()
+            }
+            .into(),
+            transform: camera_transform,
+            ..default()
+        })
+        .insert(PanOrbitCamera {
+            radius,
+            ..Default::default()
+        });
     // plane
     commands.spawn_bundle(PbrBundle {
         mesh: meshes.add(Mesh::from(shape::Plane { size: 5.0 })),
@@ -107,9 +119,7 @@ fn configure_ui_state(
 fn ui_renderer(
     mut egui_ctx: ResMut<EguiContext>,
     mut ui_state: ResMut<UiState>,
-    mut ren_param: ResMut<RenderSettings>,
     mut edit_ui: ResMut<editing_ui::EditingUI>,
-    commands: Commands,
 ) {
     egui::Window::new("Window")
         .vscroll(true)
@@ -150,19 +160,12 @@ fn ui_renderer(
 
 /// Pan the camera with middle mouse click, zoom with scroll wheel, orbit with right mouse click.
 fn pan_orbit_camera(
-    original_camera_transform: Res<OriginalCameraTransform>,
-    mut ui_state: ResMut<UiState>,
     windows: Res<Windows>,
     mut ev_motion: EventReader<MouseMotion>,
     mut ev_scroll: EventReader<MouseWheel>,
     input_mouse: Res<Input<MouseButton>>,
-    mut query: Query<(
-        &mut PanOrbitCamera,
-        &mut Transform,
-        &OrthographicProjection,
-    )>,
+    mut query: Query<(&mut PanOrbitCamera, &mut Transform)>,
 ) {
-    let window = windows.get_primary().unwrap();
     // change input mapping for orbit and panning here
     let orbit_button = MouseButton::Middle;
     let pan_button = MouseButton::Right;
@@ -191,7 +194,7 @@ fn pan_orbit_camera(
         orbit_button_changed = true;
     }
 
-    for (mut pan_orbit, mut transform, projection) in query.iter_mut() {
+    for (mut pan_orbit, mut transform) in query.iter_mut() {
         if orbit_button_changed {
             // only check for upside down when orbiting started or ended this frame
             // if the camera is "upside" down, panning horizontally would be inverted, so invert the input to make it correct
@@ -219,8 +222,6 @@ fn pan_orbit_camera(
             transform.rotation *= pitch; // rotate around local x axis
         } else if pan.length_squared() > 0.0 {
             any = true;
-            // make panning distance independent of resolution and FOV,
-            let window = get_primary_window_size(&windows);
 
             // translate by local axes
             let right = transform.rotation * Vec3::X * -pan.x;

@@ -22,6 +22,7 @@ thiserror = "1.0.32"
 tracing = "0.1.35"
 wgpu = "0.13.1"
 wgpu_glyph = "0.17.0"
+winit       = "0.27.2"
 
 [dependencies.fj-interop]
 version = "0.14.0"

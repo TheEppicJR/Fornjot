@@ -1,6 +1,5 @@
 use bevy::prelude::*;
 use fj_host::Parameters;
-use fj_kernel::algorithms::Tolerance;
 
 #[derive(Component)]
 pub struct ViweportSettings {
@@ -14,7 +13,7 @@ pub enum ViewportControlScheme {
     Custom,
 }
 
-#[derive(Component)]
+#[derive(Component, Resource)]
 pub struct RenderSettings {
     tolerance: f64,
     params: Parameters,

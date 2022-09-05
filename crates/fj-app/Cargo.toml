@@ -24,15 +24,15 @@ parry3d-f64 = "0.8.0"
 thiserror   = "1.0.30"
 threemf     = "0.2.0"
 tracing     = "0.1.32"
-wgpu        = "0.13"
-wgpu_glyph  = "0.16"
-winit       = "0.26"
-egui-wgpu = "0.18"
-egui = "0.18"
-egui-winit = "0.18"
-eframe = "0.18"
-bevy = "0.8"
-bevy_egui = "0.15"
+wgpu        = "0.13.1"
+wgpu_glyph  = "0.17"
+winit       = "0.27.2"
+egui-wgpu = "0.19"
+egui = "0.19"
+egui-winit = "0.19"
+eframe = "0.19"
+bevy = { git = "https://github.com/bevyengine/bevy" }
+bevy_egui = { git = "https://github.com/TheEppicJR/bevy_egui" }
 syntect = "5.0"
 image = "0.24"
 rfd = "0.8"
@@ -47,39 +47,39 @@ version = "0.10.6"
 features = ["env", "toml"]
 
 [dependencies.fj]
-version = "0.11.0"
+version = "0.14.0"
 path = "../fj"
 
 [dependencies.fj-export]
-version = "0.11.0"
+version = "0.14.0"
 path = "../fj-export"
 
 [dependencies.fj-host]
-version = "0.11.0"
+version = "0.14.0"
 path = "../fj-host"
 
 [dependencies.fj-interop]
-version = "0.11.0"
+version = "0.14.0"
 path = "../fj-interop"
 
 [dependencies.fj-kernel]
-version = "0.11.0"
+version = "0.14.0"
 path = "../fj-kernel"
 
 [dependencies.fj-math]
-version = "0.11.0"
+version = "0.14.0"
 path = "../fj-math"
 
 [dependencies.fj-operations]
-version = "0.11.0"
+version = "0.14.0"
 path = "../fj-operations"
 
 [dependencies.fj-viewer]
-version = "0.11.0"
+version = "0.14.0"
 path = "../fj-viewer"
 
 [dependencies.fj-window]
-version = "0.11.0"
+version = "0.14.0"
 path = "../fj-window"
 
 [dependencies.serde]
