@@ -9,7 +9,7 @@ use super::{Point, Scalar};
 ///
 /// The dimensionality of the triangle is defined by the const generic `D`
 /// parameter.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash, Ord, PartialOrd)]
 #[repr(C)]
 pub struct Triangle<const D: usize> {
     points: [Point<D>; 3],
@@ -18,10 +18,10 @@ pub struct Triangle<const D: usize> {
 impl<const D: usize> Triangle<D> {
     /// Construct a triangle from three points
     ///
-    /// # Panics
-    ///
-    /// Panics, if the points don't form a triangle.
-    pub fn from_points(points: [impl Into<Point<D>>; 3]) -> Option<Self> {
+    /// Returns an error, if the points don't form a triangle.
+    pub fn from_points(
+        points: [impl Into<Point<D>>; 3],
+    ) -> Result<Self, NotATriangle<D>> {
         let points = points.map(Into::into);
 
         let area = {
@@ -31,9 +31,9 @@ impl<const D: usize> Triangle<D> {
 
         // A triangle is not valid if it doesn't span any area
         if area != Scalar::from(0.0) {
-            Some(Self { points })
+            Ok(Self { points })
         } else {
-            None
+            Err(NotATriangle { points })
         }
     }
 
@@ -105,6 +105,12 @@ where
     fn from(points: [P; 3]) -> Self {
         Self::from_points(points).expect("invalid triangle")
     }
+}
+
+/// Returned by [`Triangle::from_points`], if the points don't form a triangle
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
+pub struct NotATriangle<const D: usize> {
+    pub points: [Point<D>; 3],
 }
 
 /// Winding direction of a triangle.

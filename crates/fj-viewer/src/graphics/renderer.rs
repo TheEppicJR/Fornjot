@@ -1,5 +1,6 @@
 use std::{io, mem::size_of};
 
+use egui_winit::winit::event_loop::EventLoop;
 use fj_interop::status_report::StatusReport;
 use fj_math::{Aabb, Point};
 use thiserror::Error;
@@ -10,7 +11,6 @@ use wgpu_glyph::ab_glyph::InvalidFont;
 use crate::{
     camera::Camera,
     screen::{Screen, Size},
-    window::Window,
 };
 
 use super::{
@@ -43,7 +43,7 @@ impl std::fmt::Debug for EguiState {
 }
 
 /// Graphics rendering state and target abstraction
-// #[derive(Debug)]
+#[derive(Debug)]
 pub struct Renderer {
     surface: wgpu::Surface,
     features: wgpu::Features,
@@ -68,7 +68,8 @@ pub struct Renderer {
 impl Renderer {
     /// Returns a new `Renderer`.
     pub async fn new(
-        window: &impl Screen<Window = egui_winit::winit::window::Window>,
+        screen: &impl Screen<Window = egui_winit::winit::window::Window>,
+        event_loop: &EventLoop<()>,
     ) -> Result<Self, InitError> {
         let instance = wgpu::Instance::new(wgpu::Backends::PRIMARY);
 
@@ -122,11 +123,11 @@ impl Renderer {
         //       Don't ask me how I know.
         //
 
-        let egui_winit_state = egui_winit::State::new(4096, window.window());
+        let egui_winit_state = egui_winit::State::new(event_loop);
         let egui_context = egui::Context::default();
 
         // This is sound, as `window` is an object to create a surface upon.
-        let surface = unsafe { instance.create_surface(window.window()) };
+        let surface = unsafe { instance.create_surface(screen.window()) };
 
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
@@ -164,16 +165,18 @@ impl Renderer {
             .await?;
 
         let color_format = surface
-            .get_preferred_format(&adapter)
+            .get_supported_formats(&adapter)
+            .get(0)
+            .copied()
             .expect("Error determining preferred color format");
 
-        let Size { width, height } = window.size();
+        let Size { width, height } = screen.size();
         let surface_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: color_format,
             width,
             height,
-            present_mode: wgpu::PresentMode::Mailbox,
+            present_mode: wgpu::PresentMode::AutoVsync,
         };
         surface.configure(&device, &surface_config);
 
@@ -321,7 +324,20 @@ impl Renderer {
             bytemuck::cast_slice(&[uniforms]),
         );
 
-        let surface_texture = self.surface.get_current_texture()?;
+        let surface_texture = match self.surface.get_current_texture() {
+            Ok(surface_texture) => surface_texture,
+            Err(wgpu::SurfaceError::Timeout) => {
+                // I'm seeing this all the time now (as in, multiple times per
+                // microsecond), which `PresentMode::AutoVsync`. Not sure what's
+                // going on, but for now, it works to just ignore it.
+                //
+                // Issues for reference:
+                // - https://github.com/gfx-rs/wgpu/issues/1218
+                // - https://github.com/gfx-rs/wgpu/issues/1565
+                return Ok(());
+            }
+            result => result?,
+        };
         let color_view = surface_texture
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
@@ -427,50 +443,150 @@ impl Renderer {
             info
         }
 
-        if self.egui.options.show_original_ui {
-            self.config_ui
-                .draw(
-                    &self.device,
-                    &mut encoder,
-                    &color_view,
-                    &self.surface_config,
-                    &self.geometries.aabb,
-                    config,
-                )
-                .map_err(DrawError::Text)?;
-        }
+        let line_drawing_available = self.is_line_drawing_available();
 
+        egui::SidePanel::left("fj-left-panel").show(&self.egui.context, |ui| {
+            ui.add_space(16.0);
 
-        //
+            ui.group(|ui| {
+                ui.checkbox(&mut config.draw_model, "Render model")
+                    .on_hover_text_at_pointer("Toggle with 1");
+                ui.add_enabled(line_drawing_available, egui::Checkbox::new(&mut config.draw_mesh, "Render mesh"))
+                    .on_hover_text_at_pointer("Toggle with 2")
+                    .on_disabled_hover_text(
+                        "Rendering device does not have line rendering feature support",
+                    );
+                ui.add_enabled(line_drawing_available, egui::Checkbox::new(&mut config.draw_debug, "Render debug"))
+                    .on_hover_text_at_pointer("Toggle with 3")
+                    .on_disabled_hover_text(
+                        "Rendering device does not have line rendering feature support"
+                    );
+                ui.checkbox(
+                    &mut self.egui.options.show_original_ui,
+                    "Render original UI",
+                );
+                ui.add_space(16.0);
+                ui.strong(get_bbox_size_text(&self.geometries.aabb));
+            });
 
-        //
-        // This integration is basically the result of locating the
-        // `.present()` call in the `egui` example, here:
-        //
-        //     <https://github.com/hasenbanck/egui_example/blob/ca1262a701daf0b20e097ef627fc301ab63339d9/src/main.rs#L177>
-        //
-        // and then the equivalent call in `renderer.rs`, here:
-        //
-        //     <https://github.com/hannobraun/Fornjot/blob/15294c2ca2fa5ac5016bb29853943b28952f2dae/fj-app/src/graphics/renderer.rs#L245>
-        //
-        // Then working backwards from there to merge the functionality.
-        //
-        // In addition, the following examples were also referenced:
-        //
-        //  * "Make the example more like an actual use case #17"
-        //    <https://github.com/hasenbanck/egui_example/pull/17/files>
-        //    This removes some non-essential code from the example
-        //    which helps clarify what's *actually* necessary.
-        //
-        //  * "Update to 0.17, use official winit backend #18"
-        //    <https://github.com/hasenbanck/egui_example/pull/18/files>
-        //    This uses a more up-to-date `egui` version which
-        //    included some API changes.
-        //    It's still not the *latest* `egui` version though.
-        //
+            ui.add_space(16.0);
 
-        let egui_input = self.egui.winit_state.take_egui_input(window);
-        self.egui.context.begin_frame(egui_input);
+            {
+                ui.group(|ui| {
+                    ui.checkbox(
+                        &mut self.egui.options.show_settings_ui,
+                        "Show egui settings UI",
+                    );
+                    if self.egui.options.show_settings_ui {
+                        self.egui.context.settings_ui(ui);
+                    }
+                });
+
+                ui.add_space(16.0);
+
+                ui.group(|ui| {
+                    ui.checkbox(
+                        &mut self.egui.options.show_inspection_ui,
+                        "Show egui inspection UI",
+                    );
+                    if self.egui.options.show_inspection_ui {
+                        ui.indent("indent-inspection-ui", |ui| {
+                            self.egui.context.inspection_ui(ui);
+                        });
+                    }
+                });
+            }
+
+            ui.add_space(16.0);
+
+            {
+                //
+                // Originally this was only meant to be a simple demonstration
+                // of the `egui` `trace!()` macro...
+                //
+                // ...but it seems the trace feature can't be enabled
+                // separately from the layout debug feature, which all
+                // gets a bit messy...
+                //
+                // ...so, this instead shows one possible way to implement
+                // "trace only" style debug text on hover.
+                //
+                ui.group(|ui| {
+                    let label_text = format!(
+                        "Show debug text demo.{}",
+                        if self.egui.options.show_debug_text_example {
+                            " (Hover me.)"
+                        } else {
+                            ""
+                        }
+                    );
+
+                    ui.style_mut().wrap = Some(false);
+
+                    if ui
+                        .checkbox(
+                            &mut self.egui.options.show_debug_text_example,
+                            label_text,
+                        )
+                        .hovered()
+                        && self.egui.options.show_debug_text_example
+                    {
+                        let hover_pos =
+                            ui.input().pointer.hover_pos().unwrap_or_default();
+                        ui.painter().debug_text(
+                            hover_pos,
+                            egui::Align2::LEFT_TOP,
+                            egui::Color32::DEBUG_COLOR,
+                            format!("{:#?}", &config),
+                        );
+                    }
+                });
+            }
+
+            ui.add_space(16.0);
+
+            {
+                //
+                // Demonstration of the `egui` layout debug functionality.
+                //
+                ui.group(|ui| {
+                    //
+
+                    if ui
+                        .checkbox(
+                            &mut self.egui.options.show_layout_debug_on_hover,
+                            "Show layout debug on hover.",
+                        )
+                        .changed()
+                    {
+                        ui.ctx().set_debug_on_hover(
+                            self.egui.options.show_layout_debug_on_hover,
+                        );
+                    }
+
+                    ui.scope(|ui| {
+                        if self.egui.options.show_trace {
+                            egui::trace!(ui, format!("{:?}", &config));
+                        }
+                    });
+
+                    ui.indent("indent-show-trace", |ui| {
+                        ui.set_enabled(
+                            self.egui.options.show_layout_debug_on_hover,
+                        );
+
+                        ui.checkbox(
+                            &mut self.egui.options.show_trace,
+                            "Also show egui trace.",
+                        );
+
+                        //
+                    });
+                });
+            }
+
+            ui.add_space(16.0);
+        });
 
         egui::Area::new("fj-status-message").show(&self.egui.context, |ui| {
             ui.group(|ui| {
@@ -485,78 +601,17 @@ impl Renderer {
         let egui_output = self.egui.context.end_frame();
         let egui_paint_jobs = self.egui.context.tessellate(egui_output.shapes);
 
-        // Upload all resources for the GPU.
-        let egui_screen_descriptor = egui_wgpu::renderer::ScreenDescriptor {
-            size_in_pixels: [
-                self.surface_config.width,
-                self.surface_config.height,
-            ],
-            // physical_width: self.surface_config.width,
-            // physical_height: self.surface_config.height,
+        self.paint_and_update_textures(
             //
             // Note: `scale_factor` can be overridden via `WINIT_X11_SCALE_FACTOR` environment variable,
             //       see: <https://docs.rs/winit/0.26.1/winit/window/struct.Window.html#method.scale_factor>
             //
-            pixels_per_point: window.scale_factor() as f32,
-        };
-
-        // Note: For info about the font texture, see:
-        //
-        //        * <https://docs.rs/egui/0.17.0/egui/enum.TextureId.html#variant.Managed>
-        //
-        //        * <https://docs.rs/epaint/0.17.0/epaint/textures/struct.TextureManager.html#method.alloc>
-
-        // self.egui_rpass
-        //     .add_textures(
-        //         &self.device,
-        //         &self.queue,
-        //         &egui_output.textures_delta,
-        //     )
-        //     .unwrap();
-
-        // self.egui_rpass
-        //     .remove_textures(egui_output.textures_delta)
-        //     .unwrap();
-
-        for (id, image_delta) in &egui_output.textures_delta.set {
-            self.egui.rpass.update_texture(
-                &self.device,
-                &self.queue,
-                *id,
-                image_delta,
-            );
-        }
-        for id in &egui_output.textures_delta.free {
-            self.egui.rpass.free_texture(id);
-        }
-
-        self.egui.rpass.update_buffers(
-            &self.device,
-            &self.queue,
+            window.scale_factor() as f32,
+            egui::Rgba::TRANSPARENT,
             &egui_paint_jobs,
-            &egui_screen_descriptor,
-        );
-
-        tracing::info!("pre-execute (egui_rpass)");
-
-        // Note: There is also an option to use an existing renderpass.
-        //
-        //       See: <https://docs.rs/egui_wgpu/0.17.0/egui_wgpu/struct.RenderPass.html#method.execute_with_renderpass>
-
-        self.egui.rpass.execute(
-            &mut encoder,
+            &egui_output.textures_delta,
             &color_view,
-            &egui_paint_jobs,
-            &egui_screen_descriptor,
-            //
-            // "Set this to `None` to overlay the UI on top of what's in the framebuffer"
-            // via <https://github.com/hasenbanck/egui_example/pull/17/files#diff-42cb6807ad74b3e201c5a7ca98b911c5fa08380e942be6e4ac5807f8377f87fcR132>
-            //
-            // Alternatively, for initial testing, you can use a colour without alpha
-            // (e.g. `Some(wgpu::Color {r:0.5, g:0.0, b:0.0, a:1.0})` ) in order
-            // to verify that the renderpass is doing *something*.
-            //
-            None,
+            &mut encoder,
         );
 
         let command_buffer = encoder.finish();
@@ -597,14 +652,14 @@ impl Renderer {
     ) {
         encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
-            color_attachments: &[wgpu::RenderPassColorAttachment {
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
                     store: true,
                 },
-            }],
+            })],
             depth_stencil_attachment: Some(
                 wgpu::RenderPassDepthStencilAttachment {
                     view: &self.depth_view,
@@ -627,24 +682,24 @@ impl Renderer {
 /// Error describing the set of render surface initialization errors
 #[derive(Error, Debug)]
 pub enum InitError {
-    #[error("I/O error: {0}")]
     /// General IO error
+    #[error("I/O error: {0}")]
     Io(#[from] io::Error),
 
-    #[error("Error request adapter")]
     /// Graphics accelerator acquisition error
+    #[error("Error request adapter")]
     RequestAdapter,
 
-    #[error("Error requesting device: {0}")]
     /// Device request errors
     ///
     /// See: [wgpu::RequestDeviceError](https://docs.rs/wgpu/latest/wgpu/struct.RequestDeviceError.html)
+    #[error("Error requesting device: {0}")]
     RequestDevice(#[from] wgpu::RequestDeviceError),
 
-    #[error("Error loading font: {0}")]
     /// Error loading font
     ///
     /// See: [ab_glyph::InvalidFont](https://docs.rs/ab_glyph/latest/ab_glyph/struct.InvalidFont.html)
+    #[error("Error loading font: {0}")]
     InvalidFont(#[from] InvalidFont),
 }
 
@@ -653,9 +708,14 @@ pub enum InitError {
 /// Describes errors related to non initialization graphics errors.
 #[derive(Error, Debug)]
 pub enum DrawError {
-    #[error("Error acquiring output surface")]
+    /// Surface drawing error.
+    ///
+    /// See - [wgpu::SurfaceError](https://docs.rs/wgpu/latest/wgpu/enum.SurfaceError.html)
+    #[error("Error acquiring output surface: {0}")]
     Surface(#[from] wgpu::SurfaceError),
-    #[error("Error drawing text")]
+
+    /// Text rasterisation error.
+    #[error("Error drawing text: {0}")]
     Text(String),
 }
 

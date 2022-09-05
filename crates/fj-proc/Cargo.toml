@@ -1,6 +1,6 @@
 [package]
 name = "fj-proc"
-version = "0.11.0"
+version = "0.14.0"
 edition = "2021"
 
 description = """\
@@ -23,7 +23,7 @@ proc-macro2 = "1.0.43"
 quote = "1.0.21"
 
 [dependencies.serde]
-version = "1.0.142"
+version = "1.0.144"
 optional = true
 
 [dependencies.syn]

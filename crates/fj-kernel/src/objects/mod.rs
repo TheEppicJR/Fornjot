@@ -8,6 +8,7 @@ mod curve;
 mod cycle;
 mod edge;
 mod face;
+mod shell;
 mod sketch;
 mod solid;
 mod surface;
@@ -16,8 +17,9 @@ mod vertex;
 pub use self::{
     curve::{Curve, CurveKind, GlobalCurve},
     cycle::Cycle,
-    edge::{Edge, VerticesOfEdge},
+    edge::{Edge, GlobalEdge, VerticesOfEdge},
     face::Face,
+    shell::Shell,
     sketch::Sketch,
     solid::Solid,
     surface::{Surface, SweptCurve},

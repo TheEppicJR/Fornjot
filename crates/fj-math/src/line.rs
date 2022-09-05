@@ -4,7 +4,7 @@ use crate::{Point, Scalar, Triangle, Vector};
 ///
 /// The dimensionality of the line is defined by the const generic `D`
 /// parameter.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash, Ord, PartialOrd)]
 #[repr(C)]
 pub struct Line<const D: usize> {
     origin: Point<D>,
@@ -42,6 +42,25 @@ impl<const D: usize> Line<D> {
         Self::from_origin_and_direction(a, b - a)
     }
 
+    /// Create a line from two points that include line coordinates
+    ///
+    /// # Panics
+    ///
+    /// Panics, if the points are coincident.
+    pub fn from_points_with_line_coords(
+        points: [(impl Into<Point<1>>, impl Into<Point<D>>); 2],
+    ) -> Self {
+        let [(a_line, a_global), (b_line, b_global)] =
+            points.map(|(point_line, point_global)| {
+                (point_line.into(), point_global.into())
+            });
+
+        let direction = (b_global - a_global) / (b_line - a_line).t;
+        let origin = a_global + direction * -a_line.t;
+
+        Self::from_origin_and_direction(origin, direction)
+    }
+
     /// Access the origin of the line
     ///
     /// The origin is a point on the line which, together with the `direction`
@@ -74,7 +93,7 @@ impl<const D: usize> Line<D> {
 
             // The triangle is valid only, if the three points are not on the
             // same line.
-            Triangle::from_points([a, b, c]).is_some()
+            Triangle::from_points([a, b, c]).is_ok()
         };
 
         if other_origin_is_not_on_self {

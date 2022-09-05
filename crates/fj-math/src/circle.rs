@@ -6,7 +6,7 @@ use crate::{Point, Scalar, Vector};
 ///
 /// The dimensionality of the circle is defined by the const generic `D`
 /// parameter.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct Circle<const D: usize> {
     center: Point<D>,
     a: Vector<D>,
@@ -107,7 +107,7 @@ impl<const D: usize> Circle<D> {
         let coord = if atan >= Scalar::ZERO {
             atan
         } else {
-            atan + Scalar::PI * 2.
+            atan + Scalar::TAU
         };
         Point::from([coord])
     }

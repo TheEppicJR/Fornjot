@@ -1,6 +1,6 @@
 [package]
 name = "fj"
-version = "0.11.0"
+version = "0.14.0"
 edition = "2021"
 
 description = """\
@@ -16,11 +16,11 @@ categories = ["encoding", "mathematics", "rendering"]
 
 
 [dependencies]
-serde = { version = "1.0.142", features = ["derive"], optional = true }
+serde = { version = "1.0.144", features = ["derive"], optional = true }
 
 [dependencies.fj-proc]
-version = "0.11.0"
+version = "0.14.0"
 path = "../../crates/fj-proc"
 
 [dev-dependencies]
-serde_json = "1.0.83"
+serde_json = "1.0.85"

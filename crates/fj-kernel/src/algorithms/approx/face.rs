@@ -4,30 +4,17 @@ use fj_math::Point;
 
 use crate::objects::Face;
 
-use super::{CycleApprox, Local, Tolerance};
+use super::{Approx, CycleApprox, Tolerance};
 
-/// An approximation of a [`Face`]
-#[derive(Debug, PartialEq)]
-pub struct FaceApprox {
-    /// All points that make up the approximation
-    ///
-    /// These could be actual vertices from the model, points that approximate
-    /// an edge, or points that approximate a face.
-    pub points: HashSet<Local<Point<2>>>,
+impl Approx for Face {
+    type Approximation = FaceApprox;
+    type Params = ();
 
-    /// Approximation of the exterior cycle
-    pub exterior: CycleApprox,
-
-    /// Approximations of the interior cycles
-    pub interiors: HashSet<CycleApprox>,
-}
-
-impl FaceApprox {
-    /// Compute the approximation of a face
-    ///
-    /// `tolerance` defines how far the approximation is allowed to deviate from
-    /// the actual face.
-    pub fn new(face: &Face, tolerance: Tolerance) -> Self {
+    fn approx(
+        &self,
+        tolerance: Tolerance,
+        (): Self::Params,
+    ) -> Self::Approximation {
         // Curved faces whose curvature is not fully defined by their edges
         // are not supported yet. For that reason, we can fully ignore `face`'s
         // `surface` field and just pass the edges to `Self::for_edges`.
@@ -45,14 +32,14 @@ impl FaceApprox {
         let mut exteriors = Vec::new();
         let mut interiors = HashSet::new();
 
-        for cycle in face.exteriors() {
-            let cycle = CycleApprox::new(cycle, tolerance);
+        for cycle in self.exteriors() {
+            let cycle = cycle.approx(tolerance, ());
 
             points.extend(cycle.points.iter().copied());
             exteriors.push(cycle);
         }
-        for cycle in face.interiors() {
-            let cycle = CycleApprox::new(cycle, tolerance);
+        for cycle in self.interiors() {
+            let cycle = cycle.approx(tolerance, ());
 
             points.extend(cycle.points.iter().copied());
             interiors.insert(cycle);
@@ -70,12 +57,28 @@ impl FaceApprox {
             "Approximation only supports faces with one exterior cycle",
         );
 
-        Self {
+        FaceApprox {
             points,
             exterior,
             interiors,
         }
     }
+}
+
+/// An approximation of a [`Face`]
+#[derive(Debug, Eq, PartialEq)]
+pub struct FaceApprox {
+    /// All points that make up the approximation
+    ///
+    /// These could be actual vertices from the model, points that approximate
+    /// an edge, or points that approximate a face.
+    pub points: HashSet<(Point<2>, Point<3>)>,
+
+    /// Approximation of the exterior cycle
+    pub exterior: CycleApprox,
+
+    /// Approximations of the interior cycles
+    pub interiors: HashSet<CycleApprox>,
 }
 
 #[cfg(test)]
@@ -84,7 +87,7 @@ mod tests {
     use map_macro::set;
 
     use crate::{
-        algorithms::approx::Local,
+        algorithms::approx::Approx,
         objects::{Face, Surface},
     };
 
@@ -111,16 +114,16 @@ mod tests {
             .polygon_from_points([a, b, c, d])
             .with_hole([e, f, g, h]);
 
-        let a = Local::new(a, a.to_xyz());
-        let b = Local::new(b, b.to_xyz());
-        let c = Local::new(c, c.to_xyz());
-        let d = Local::new(d, d.to_xyz());
-        let e = Local::new(e, e.to_xyz());
-        let f = Local::new(f, f.to_xyz());
-        let g = Local::new(g, g.to_xyz());
-        let h = Local::new(h, h.to_xyz());
+        let a = (a, a.to_xyz());
+        let b = (b, b.to_xyz());
+        let c = (c, c.to_xyz());
+        let d = (d, d.to_xyz());
+        let e = (e, e.to_xyz());
+        let f = (f, f.to_xyz());
+        let g = (g, g.to_xyz());
+        let h = (h, h.to_xyz());
 
-        let approx = FaceApprox::new(&face, tolerance);
+        let approx = face.approx(tolerance, ());
         let expected = FaceApprox {
             points: set![a, b, c, d, e, f, g, h],
             exterior: CycleApprox {
